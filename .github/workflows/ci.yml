@@ -110,7 +110,7 @@ jobs:
           assert lock["direct_dependencies"] == ["candis-camera"]
           assert not any(name.split("/")[-1] == "candis" for name in lock["dependencies"])
           PY
-      - name: Check extension package manifests
+      - name: Build with each packed expansion component
         env:
           REGISTRY_NAMESPACE: ${{ vars.IDF_COMPONENT_NAMESPACE }}
         run: |
@@ -118,22 +118,52 @@ jobs:
           namespace="${REGISTRY_NAMESPACE:-candis_ci}"
           for component in candis_dock candis_gamepad; do
             stage="$RUNNER_TEMP/candis-extensions/$component"
+            package="$RUNNER_TEMP/candis-extension-packages/$component"
             python3 tools/stage_registry_extension.py "$component" "$stage" --namespace "$namespace"
             compote component pack --project-dir "$stage" --name "$component" \
-              --commit-sha "$GITHUB_SHA" --repository-path "components/$component"
-            python3 - "$stage" "$component" "$namespace" <<'PY'
+              --commit-sha "$GITHUB_SHA" --repository-path "components/$component" --dest-dir "$package"
+            mkdir -p "$package/$component"
+            tar -xf "$package"/"${component}"_*.tgz -C "$package/$component"
+
+            consumer="$RUNNER_TEMP/$component-consumer"
+            mkdir -p "$consumer/main"
+            cp examples/expansion/{CMakeLists.txt,sdkconfig.defaults} "$consumer/"
+            printf 'idf_component_register(SRCS "main.c")\n' > "$consumer/main/CMakeLists.txt"
+            case "$component" in
+              candis_dock) call='candis_dock_mount(NULL, "/sdcard", NULL)' ;;
+              candis_gamepad) call='candis_gamepad_open(NULL)' ;;
+            esac
+            cat > "$consumer/main/main.c" <<C
+          #include "bsp/$component.h"
+
+          void app_main(void)
+          {
+              (void)$call;
+          }
+          C
+            cat > "$consumer/main/idf_component.yml" <<YAML
+          dependencies:
+            $component:
+              path: ../../candis-extension-packages/$component/$component
+            $namespace/candis:
+              override_path: ../../candis-package/candis
+          YAML
+            idf.py --preview -C "$consumer" build
+            python3 - "$package/$component/idf_component.yml" "$consumer/dependencies.lock" "$component" "$namespace" <<'PY'
           import sys
-          import tarfile
           from pathlib import Path
 
           import yaml
 
-          stage, component, namespace = sys.argv[1:]
-          archive, = (Path(stage) / "dist").glob(f"{component}_*.tgz")
-          with tarfile.open(archive) as package:
-              manifest = yaml.safe_load(package.extractfile("./idf_component.yml"))
+          manifest_path, lock_path, component, namespace = sys.argv[1:]
+          manifest = yaml.safe_load(Path(manifest_path).read_text())
+          lock = yaml.safe_load(Path(lock_path).read_text())
           assert manifest["repository_info"]["path"] == f"components/{component}"
-          assert f"{namespace}/candis" in manifest["dependencies"]
+          bsp = f"{namespace}/candis"
+          assert set(manifest["dependencies"]) == {"idf", bsp}
+          assert not {"path", "override_path"} & manifest["dependencies"][bsp].keys()
+          assert manifest["dependencies"][bsp]["version"] == f"=={lock['dependencies'][bsp]['version']}"
+          assert set(lock["direct_dependencies"]) == {component, bsp}
           PY
           done
       - name: Check whitespace
@@ -204,6 +234,19 @@ jobs:
           if manifest["version"] != sys.argv[2] or manifest["repository_info"]["commit_sha"] != expected_sha:
               sys.exit(f"The Registry archive does not match version {sys.argv[2]} at {expected_sha}")
           PY
+      - name: Archive the Registry display firmware
+        if: github.event_name == 'workflow_dispatch' && inputs.publish
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: registry-display-firmware
+          path: |
+            ${{ runner.temp }}/display/build/candis_display.bin
+            ${{ runner.temp }}/display/build/bootloader/bootloader.bin
+            ${{ runner.temp }}/display/build/partition_table/partition-table.bin
+            ${{ runner.temp }}/display/build/flasher_args.json
+            ${{ runner.temp }}/display/dependencies.lock
+          if-no-files-found: error
+          retention-days: 14
       - name: Publish candis-camera on the ESP Component Registry
         if: github.event_name == 'workflow_dispatch' && inputs.publish_camera
         uses: espressif/upload-components-ci-action@2ce17d73e35473317c1419dbd4f007aacb593040 # v2.2.1
@@ -236,3 +279,39 @@ jobs:
           if manifest["version"] != sys.argv[2] or manifest["repository_info"]["commit_sha"] != os.environ["GITHUB_SHA"]:
               sys.exit("The Registry camera archive does not match this version and commit")
           PY
+      - name: Build the camera preview with the packaged or Registry component
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          REGISTRY_NAMESPACE: ${{ vars.IDF_COMPONENT_NAMESPACE }}
+          PUBLISH_CAMERA: ${{ inputs.publish_camera }}
+        run: |
+          source "$RUNNER_TEMP/esp-idf/export.sh"
+          consumer="$RUNNER_TEMP/camera-preview-consumer"
+          mkdir -p "$consumer/main"
+          cp examples/camera/{CMakeLists.txt,sdkconfig.defaults,sdkconfig.bench} "$consumer/"
+          cp examples/camera/main/{CMakeLists.txt,Kconfig.projbuild,main.c,camera_fixture.c,camera_fixture.h} "$consumer/main/"
+          printf 'dependencies:\n  candis:\n    path: ../../candis-package/candis\n' > "$consumer/main/idf_component.yml"
+          if [[ "$PUBLISH_CAMERA" == true ]]; then
+            version="$(python3 -c 'import yaml; print(yaml.safe_load(open("components/candis-camera/idf_component.yml"))["version"])')"
+            printf '  %s/candis-camera: "==%s"\n' "$REGISTRY_NAMESPACE" "$version" >> "$consumer/main/idf_component.yml"
+          else
+            printf '  candis-camera:\n    path: ../../candis-camera-package/candis-camera\n' >> "$consumer/main/idf_component.yml"
+          fi
+          idf.py --preview -C "$consumer" -D 'SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.bench' build
+          if [[ "$PUBLISH_CAMERA" == true ]]; then
+            camera_manifest="managed_components/${REGISTRY_NAMESPACE}__candis-camera/idf_component.yml"
+            cmp "$RUNNER_TEMP/camera-registry-consumer/$camera_manifest" "$consumer/$camera_manifest"
+          fi
+      - name: Archive the camera preview firmware
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: camera-preview-firmware
+          path: |
+            ${{ runner.temp }}/camera-preview-consumer/build/candis_camera_demo.bin
+            ${{ runner.temp }}/camera-preview-consumer/build/bootloader/bootloader.bin
+            ${{ runner.temp }}/camera-preview-consumer/build/partition_table/partition-table.bin
+            ${{ runner.temp }}/camera-preview-consumer/build/flasher_args.json
+            ${{ runner.temp }}/camera-preview-consumer/dependencies.lock
+          if-no-files-found: error
+          retention-days: 14

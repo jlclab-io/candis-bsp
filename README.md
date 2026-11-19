@@ -141,13 +141,16 @@ GitHub Actions 构建六个独立示例、运行主机测试，并从 `compote` 
 在 `main` 手动运行 **ESP-IDF build**，默认向 Registry 提交校验且跳过版本创建。
 预检通过后可启用 `publish` 发布清单中的版本。发布包附带显示示例，引用同一
 Registry 命名空间下的确切版本。工作流从 Registry 下载并构建该示例，随后核对
-组件清单记录的 Git 提交。命名空间尚未配置时，预检中的示例使用固定的 Git 修订。
+组件清单记录的 Git 提交，并归档显示示例的固件和依赖锁文件供实板复验。
+命名空间尚未配置时，预检中的示例使用固定的 Git 修订。
 
 摄像头组件使用独立清单，可单独预检和发布。手动工作流的 `publish_camera`
 选项上传 `candis-camera`，随后从 Registry 下载到全新应用并验证构建和来源提交。
-综合测试板预设位于摄像头示例，安装方法见 [摄像头组件](components/candis-camera)。
+手动运行还会归档综合测试板的预览镜像及依赖锁文件。预检使用解包的摄像头组件，
+发布运行使用从 Registry 下载的摄像头组件。预览使用 `sdkconfig.bench` 配置，
+包含 ALDO1 管理和 80 MHz QSPI。安装和接线见 [摄像头组件](components/candis-camera)。
 
 Dock 和 Gamepad 在仓库中通过本地路径联调。发布时，用
 `python3 tools/stage_registry_extension.py <组件名> <新暂存目录> --namespace <已获批命名空间>`
-生成清单。CI 检查两个扩展能否单独打包，暂存包依赖主 BSP 清单中的确切版本。
+生成清单。CI 分别解包两个扩展并构建独立应用，使用本地的主 BSP 包验证依赖版本。
 对应主 BSP 版本发布后，可对这两个扩展做上传预检、全新工程安装及对应硬件验证。
