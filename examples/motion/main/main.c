@@ -80,6 +80,29 @@ static esp_err_t imu_first(bool manage, bool initial)
 }
 #endif
 
+static esp_err_t run_motion_test(bool manage)
+{
+#ifdef CONFIG_CANDIS_MOTION_TEST_STORAGE
+    candis_power_state_t power;
+    ESP_RETURN_ON_ERROR(candis_power_read(&power), TAG, "read initial expansion power");
+    ESP_LOGI(TAG, "Initial DC1SW=%d ALDO3=%d", power.dc1sw, power.aldo3);
+#endif
+    ESP_RETURN_ON_ERROR(candis_imu_start(manage), TAG, "start IMU");
+    esp_err_t result = read_samples();
+    esp_err_t stop = candis_imu_stop();
+    ESP_RETURN_ON_ERROR(result, TAG, "sample IMU");
+    ESP_RETURN_ON_ERROR(stop, TAG, "stop IMU");
+    ESP_LOGI(TAG, "IMU standalone start, sample and stop passed");
+#ifdef CONFIG_CANDIS_MOTION_TEST_STORAGE
+    ESP_RETURN_ON_ERROR(check_dc1sw(power.dc1sw), TAG, "restore initial DC1SW");
+    ESP_RETURN_ON_ERROR(storage_first(manage, power.dc1sw), TAG, "verify storage-first release");
+    ESP_LOGI(TAG, "DC1SW storage-first release passed");
+    ESP_RETURN_ON_ERROR(imu_first(manage, power.dc1sw), TAG, "verify IMU-first release");
+    ESP_LOGI(TAG, "DC1SW IMU-first release passed");
+#endif
+    return ESP_OK;
+}
+
 void app_main(void)
 {
 #ifdef CONFIG_CANDIS_MOTION_MANAGE_POWER
@@ -87,22 +110,8 @@ void app_main(void)
 #else
     const bool manage = false;
 #endif
-#ifdef CONFIG_CANDIS_MOTION_TEST_STORAGE
-    candis_power_state_t power;
-    ESP_ERROR_CHECK(candis_power_read(&power));
-    ESP_LOGI(TAG, "Initial DC1SW=%d ALDO3=%d", power.dc1sw, power.aldo3);
-#endif
-    ESP_ERROR_CHECK(candis_imu_start(manage));
-    esp_err_t result = read_samples();
-    esp_err_t stop = candis_imu_stop();
-    ESP_ERROR_CHECK(result);
-    ESP_ERROR_CHECK(stop);
-    ESP_LOGI(TAG, "IMU standalone start, sample and stop passed");
-#ifdef CONFIG_CANDIS_MOTION_TEST_STORAGE
-    ESP_ERROR_CHECK(check_dc1sw(power.dc1sw));
-    ESP_ERROR_CHECK(storage_first(manage, power.dc1sw));
-    ESP_LOGI(TAG, "DC1SW storage-first release passed");
-    ESP_ERROR_CHECK(imu_first(manage, power.dc1sw));
-    ESP_LOGI(TAG, "DC1SW IMU-first release passed");
-#endif
+    const esp_err_t err = run_motion_test(manage);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Motion test stopped: %s", esp_err_to_name(err));
+    }
 }
