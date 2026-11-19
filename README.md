@@ -38,6 +38,13 @@ RTC 示例通过综合测试板的 USB Serial/JTAG 提供命令行。输入 `REA
 `SET <UTC epoch>` 设置有效日历，`RECOVER <UTC epoch>` 允许恢复掉电后无效的日历。
 在主机执行 `date -u +%s` 获取当前 epoch。示例启动时只读日历。
 
+日历有效时，发送 `SLEEP` 测试 RTC 更新中断唤醒。示例临时屏蔽 TG28 中断，
+将 GPIO0 配置为低电平 EXT1 唤醒源，并设 5 秒定时器兜底。USB Serial/JTAG
+重新枚举后重新打开串口，发送 `WAKE`。成功结果为
+`RTC_WAKE ESP_OK deep=1 ext1=1 guard=0 update=1 restore=ESP_OK`。
+综合测试板的 CDC 唤醒后可能无法收发。此时先用匹配的 ELF 经 JTAG 读
+`s_wake`，硬复位会丢失本轮结果。测量条件和判据见 [硬件与实测](docs/hardware.md)。
+
 运动示例默认使用已经上电的扩展域。确认综合测试板的 DC1SW 负载后，可在 `menuconfig`
 启用 `CANDIS_MOTION_MANAGE_POWER`。`CANDIS_MOTION_TEST_STORAGE` 额外验证连接的 TF 卡
 与 IMU 并行时的供电释放顺序。

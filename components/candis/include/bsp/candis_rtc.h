@@ -22,6 +22,25 @@ esp_err_t candis_rtc_get_time(struct tm *utc);
  */
 esp_err_t candis_rtc_set_time(const struct tm *utc, bool recover_invalid);
 
+/** State owned by the caller. Initialize to zero and retain across deep sleep. */
+typedef struct {
+    bool restore_pending;
+    bool minute_updates;
+} candis_rtc_update_irq_t;
+
+/** Configure the idle RX8130CE to pulse the shared GPIO0 line at each second update.
+ * Requires a valid calendar and exclusive use of the RTC interrupt configuration.
+ * The app configures GPIO0 and any ESP sleep wake sources. TG28 is untouched.
+ * If restore_pending remains set on error, retry candis_rtc_disarm_update_irq().
+ */
+esp_err_t candis_rtc_arm_update_irq(candis_rtc_update_irq_t *state);
+
+/** Read the RTC update flag, disable its interrupt, and restore the update interval.
+ * Call on wake or if sleep is canceled. updated may be NULL. An RTC update flag
+ * alone does not identify the source of a shared GPIO0 interrupt.
+ */
+esp_err_t candis_rtc_disarm_update_irq(candis_rtc_update_irq_t *state, bool *updated);
+
 #ifdef __cplusplus
 }
 #endif

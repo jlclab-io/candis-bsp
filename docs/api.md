@@ -44,7 +44,13 @@ ALDO1 电源条件和台架频率见 [硬件与实测](hardware.md)。
 首次使用或掉电使 VLF 置位时，可显式调用 `candis_rtc_set_time(&utc, true)`。该流程复位闲置的
 闹钟、定时器、数字校正和后备开关配置，后备充电已开启时拒绝执行。仅在写入校验并恢复走时后
 清除 VLF，保留其他待处理中断标志。RTC 与 TG28 共用 GPIO0，该流程不更改 TG28 或 SoC 的中断配置。
-后备供电保持、走时精度和 RTC 唤醒需分别验证。
+
+`candis_rtc_arm_update_irq(&state)` 在 RTC 日历有效、定时器与中断均空闲时启用每秒
+更新中断。应用调用前将 `candis_rtc_update_irq_t` 清零，并将它存入可跨深睡保留的内存。
+唤醒或取消睡眠时调用 `candis_rtc_disarm_update_irq(&state, &updated)`。该函数关闭
+更新中断、清除 UF 并恢复原更新周期。若操作失败且 `restore_pending` 仍为真，保留
+状态并重试恢复。应用负责配置 SoC 唤醒源和协调 TG28 的共享中断。判断 RTC 唤醒时，
+同时检查深睡复位原因、EXT1 引脚、RTC 更新标志以及共享线上其他中断源。
 
 ## 存储
 

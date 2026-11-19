@@ -17,8 +17,11 @@ enum {
     RX8130_OFFSET = 0x30,
     RX8130_BACKUP_DETECT = 0x31,
     RX8130_FLAG_VLF = 0x02,
+    RX8130_FLAG_UF = 0x20,
     RX8130_W0C_FLAGS = 0xbf,
     RX8130_TIMER_ENABLE = 0x10,
+    RX8130_MINUTE_UPDATES = 0x20,
+    RX8130_CONTROL_UIE = 0x20,
     RX8130_CONTROL_STOP = 0x40,
     RX8130_CONTROL_TEST_OR_IRQ = 0xb8,
     RX8130_BACKUP_INIT = 0x10,
@@ -267,4 +270,89 @@ esp_err_t candis_rtc_set_time(const struct tm *utc, bool recover_invalid)
         err = set_clock(utc, recover_invalid);
     }
     return close_rtc(err);
+}
+
+static esp_err_t restore_update_irq(candis_rtc_update_irq_t *state)
+{
+    uint8_t config[3];
+    ESP_RETURN_ON_ERROR(rtc_read(RX8130_EXTENSION, config, sizeof(config)), TAG, "read update IRQ configuration");
+    ESP_RETURN_ON_ERROR(write_checked(RX8130_CONTROL, config[2] & ~RX8130_CONTROL_UIE), TAG, "disable update IRQ");
+    ESP_RETURN_ON_ERROR(rtc_write(RX8130_FLAGS, RX8130_W0C_FLAGS & ~RX8130_FLAG_UF), TAG, "acknowledge RTC update");
+    uint8_t extension = config[0] & ~RX8130_MINUTE_UPDATES;
+    if (state->minute_updates) {
+        extension |= RX8130_MINUTE_UPDATES;
+    }
+    ESP_RETURN_ON_ERROR(write_checked(RX8130_EXTENSION, extension), TAG, "restore RTC update interval");
+    *state = (candis_rtc_update_irq_t){0};
+    return ESP_OK;
+}
+
+static esp_err_t arm_update_irq(candis_rtc_update_irq_t *state)
+{
+    struct tm utc;
+    ESP_RETURN_ON_ERROR(read_calendar(&utc), TAG, "validate RTC calendar");
+    uint8_t config[3];
+    ESP_RETURN_ON_ERROR(rtc_read(RX8130_EXTENSION, config, sizeof(config)), TAG, "read RTC configuration");
+    if ((config[0] & RX8130_TIMER_ENABLE) ||
+            (config[1] & RX8130_FLAG_VLF) ||
+            (config[2] & (RX8130_CONTROL_STOP | RX8130_CONTROL_TEST_OR_IRQ))) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    /* Retain the original interval before the first write. A failed write can reach the RTC. */
+    *state = (candis_rtc_update_irq_t){
+        .restore_pending = true, .minute_updates = !!(config[0] & RX8130_MINUTE_UPDATES),
+    };
+    esp_err_t result = write_checked(RX8130_EXTENSION, config[0] & ~RX8130_MINUTE_UPDATES);
+    if (result == ESP_OK) {
+        result = rtc_write(RX8130_FLAGS, RX8130_W0C_FLAGS & ~RX8130_FLAG_UF);
+    }
+    if (result == ESP_OK) {
+        result = write_checked(RX8130_CONTROL, config[2] | RX8130_CONTROL_UIE);
+    }
+    if (result != ESP_OK) {
+        esp_err_t restore = restore_update_irq(state);
+        if (restore != ESP_OK) {
+            ESP_LOGE(TAG, "could not restore RTC update IRQ: %s", esp_err_to_name(restore));
+        }
+    }
+    return result;
+}
+
+esp_err_t candis_rtc_arm_update_irq(candis_rtc_update_irq_t *state)
+{
+    if (!state) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (state->restore_pending || !candis_control_enter()) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    esp_err_t result = open_rtc();
+    if (result == ESP_OK) {
+        result = arm_update_irq(state);
+    }
+    return close_rtc(result);
+}
+
+esp_err_t candis_rtc_disarm_update_irq(candis_rtc_update_irq_t *state, bool *updated)
+{
+    if (!state) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (!candis_control_enter()) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    uint8_t flags = 0;
+    esp_err_t result = open_rtc();
+    if (result == ESP_OK && state->restore_pending) {
+        esp_err_t flag_result = updated ? rtc_read(RX8130_FLAGS, &flags, 1) : ESP_OK;
+        result = restore_update_irq(state);
+        if (result == ESP_OK) {
+            result = flag_result;
+        }
+    }
+    result = close_rtc(result);
+    if (result == ESP_OK && updated) {
+        *updated = (flags & (RX8130_FLAG_UF | RX8130_FLAG_VLF)) == RX8130_FLAG_UF;
+    }
+    return result;
 }

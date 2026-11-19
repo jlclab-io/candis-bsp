@@ -41,6 +41,8 @@ static uint8_t registers[256];
 static unsigned writes;
 static int fail_calendar_writes;
 static bool fail_stop_once;
+static bool fail_irq_enable_once;
+static bool fail_irq_disable_once;
 static bool locked;
 
 bool candis_control_enter(void) { if (locked) return false; return locked = true; }
@@ -82,6 +84,15 @@ esp_err_t i2c_master_transmit(i2c_master_dev_handle_t dev, const uint8_t *data, 
     }
     if (reg == 0x1f) assert(!(data[1] & 0x20));
     memcpy(registers + reg, data + 1, size - 1);
+    if (reg == 0x1e && (data[1] & 0x20) && fail_irq_enable_once) {
+        fail_irq_enable_once = false;
+        return ESP_FAIL;
+    }
+    if (reg == 0x1e && !(data[1] & 0x20) && fail_irq_disable_once) {
+        fail_irq_disable_once = false;
+        registers[reg] |= 0x20;
+        return ESP_FAIL;
+    }
     if (reg == 0x1e && (data[1] & 0x40) && fail_stop_once) {
         fail_stop_once = false;
         return ESP_FAIL;
@@ -126,6 +137,30 @@ int main(void)
     assert(candis_rtc_get_time(&actual) == ESP_ERR_INVALID_STATE);
     assert(candis_rtc_set_time(&next, false) == ESP_OK);
     assert(candis_rtc_get_time(&actual) == ESP_OK && actual.tm_sec == 56);
+
+    candis_rtc_update_irq_t irq = {0};
+    registers[0x1c] = 0x24; /* Minute updates and the idle timer clock select. */
+    registers[0x1d] = 0x3c;
+    registers[0x1e] = 0x08; /* An existing alarm owns the interrupt. */
+    before = writes;
+    assert(candis_rtc_arm_update_irq(&irq) == ESP_ERR_INVALID_STATE && writes == before);
+    registers[0x1e] = 0;
+    assert(candis_rtc_arm_update_irq(&irq) == ESP_OK);
+    assert(irq.restore_pending && irq.minute_updates);
+    assert(registers[0x1c] == 0x04 && registers[0x1d] == 0x1c && registers[0x1e] == 0x20);
+    assert(candis_rtc_arm_update_irq(&irq) == ESP_ERR_INVALID_STATE);
+    registers[0x1d] |= 0x20;
+    bool updated = false;
+    assert(candis_rtc_disarm_update_irq(&irq, &updated) == ESP_OK && updated);
+    assert(!irq.restore_pending && registers[0x1c] == 0x24 &&
+           registers[0x1d] == 0x1c && registers[0x1e] == 0);
+
+    fail_irq_enable_once = true;
+    fail_irq_disable_once = true;
+    assert(candis_rtc_arm_update_irq(&irq) == ESP_FAIL);
+    assert(irq.restore_pending && registers[0x1e] == 0x20);
+    assert(candis_rtc_disarm_update_irq(&irq, NULL) == ESP_OK);
+    assert(!irq.restore_pending && registers[0x1c] == 0x24 && registers[0x1e] == 0);
     return 0;
 }
 """

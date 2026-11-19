@@ -9,6 +9,10 @@
 #include "driver/usb_serial_jtag_vfs.h"
 #include "freertos/FreeRTOS.h"
 
+esp_err_t candis_rtc_example_sleep(void);
+void candis_rtc_example_resume(void);
+void candis_rtc_example_report_wake(void);
+
 static void report_time(void)
 {
     struct tm time;
@@ -28,6 +32,14 @@ static void handle_command(const char *command)
         report_time();
         return;
     }
+    if (strcmp(command, "SLEEP") == 0) {
+        printf("RTC_SLEEP %s\n", esp_err_to_name(candis_rtc_example_sleep()));
+        return;
+    }
+    if (strcmp(command, "WAKE") == 0) {
+        candis_rtc_example_report_wake();
+        return;
+    }
     const bool recover = strncmp(command, "RECOVER ", 8) == 0;
     const char *argument = NULL;
     if (recover) {
@@ -38,7 +50,7 @@ static void handle_command(const char *command)
     char *end = NULL;
     const int64_t seconds = argument && *argument >= '0' && *argument <= '9' ? strtoll(argument, &end, 10) : 0;
     if (!end || *end != '\0' || seconds < INT64_C(946684800) || seconds >= INT64_C(4102444800)) {
-        puts("RTC_COMMAND expected READ, SET <UTC epoch>, or RECOVER <UTC epoch>");
+        puts("RTC_COMMAND expected READ, SET <UTC epoch>, RECOVER <UTC epoch>, SLEEP, or WAKE");
         return;
     }
     const time_t epoch = seconds;
@@ -56,10 +68,11 @@ static void handle_command(const char *command)
 
 void app_main(void)
 {
+    candis_rtc_example_resume();
     usb_serial_jtag_driver_config_t config = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(usb_serial_jtag_driver_install(&config));
     usb_serial_jtag_vfs_use_driver();
-    puts("RTC_READY commands=READ,SET,RECOVER utc=epoch_seconds");
+    puts("RTC_READY commands=READ,SET,RECOVER,SLEEP,WAKE utc=epoch_seconds");
     report_time();
     char line[48];
     size_t count = 0;
