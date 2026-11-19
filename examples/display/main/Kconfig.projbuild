@@ -1,0 +1,19 @@
+menu "Candis display example"
+
+config CANDIS_BENCH_PANEL_POWER
+    bool "Allow the example to enable the AMOLED rail"
+    default n
+    help
+        Enable for a measured setup compatible with a nominal 3.3 V ALDO1.
+
+config CANDIS_BENCH_QSPI_80MHZ
+    bool "Use the Bring-Up 80 MHz QSPI setting"
+    default n
+    help
+        Use on the characterized setup for comparison with Bring-Up.
+
+config CANDIS_BENCH_AUTORUN
+    bool "Automatically measure partial/full refresh and restart the display"
+    default n
+
+endmenu

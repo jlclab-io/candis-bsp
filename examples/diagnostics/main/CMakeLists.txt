@@ -1,0 +1,7 @@
+idf_component_register(SRCS "main.c" INCLUDE_DIRS ".")
+if(CONFIG_CANDIS_DIAGNOSTICS_OTG)
+    target_sources(${COMPONENT_LIB} PRIVATE "otg.c")
+endif()
+if(CONFIG_CANDIS_DIAGNOSTICS_AUDIO)
+    target_sources(${COMPONENT_LIB} PRIVATE "audio.c")
+endif()

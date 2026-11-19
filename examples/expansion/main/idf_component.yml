@@ -1,0 +1,5 @@
+dependencies:
+  candis_bb:
+    path: ../../../components/candis_bb
+  candis_gamepad:
+    path: ../../../components/candis_gamepad

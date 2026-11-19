@@ -1,0 +1,13 @@
+version: "0.1.0"
+description: Candis bb expansion support
+license: Apache-2.0
+repository: https://github.com/jlclab-io/candis-bsp.git
+repository_info:
+  path: components/candis_bb
+targets:
+  - esp32s31
+dependencies:
+  idf: ">=6.2,<6.3"
+  candis:
+    path: ../candis
+    public: true

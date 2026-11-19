@@ -1,0 +1,8 @@
+menu "Candis BSP"
+
+config CANDIS_AUDIO
+    bool "Build the Candis ES8389 audio interface"
+    default n
+    select CODEC_ES8389_SUPPORT
+
+endmenu

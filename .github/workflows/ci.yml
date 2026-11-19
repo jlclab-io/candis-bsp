@@ -1,0 +1,45 @@
+name: ESP-IDF build
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      IDF_REVISION: 2b10d1278a547f5dc92efbe516144b4ae85f80cb
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build ccache libffi-dev libssl-dev libusb-1.0-0
+      - name: Fetch ESP-IDF and the S31 toolchain
+        run: |
+          git init "$RUNNER_TEMP/esp-idf"
+          git -C "$RUNNER_TEMP/esp-idf" remote add origin https://github.com/espressif/esp-idf.git
+          git -C "$RUNNER_TEMP/esp-idf" fetch --depth 1 origin "$IDF_REVISION"
+          git -C "$RUNNER_TEMP/esp-idf" checkout --detach FETCH_HEAD
+          git -C "$RUNNER_TEMP/esp-idf" submodule update --init --recursive --jobs 8
+          "$RUNNER_TEMP/esp-idf/install.sh" esp32s31
+      - name: Build the standalone examples
+        run: |
+          source "$RUNNER_TEMP/esp-idf/export.sh"
+          idf.py --preview -C examples/display build
+          idf.py --preview -C examples/diagnostics -D 'SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.features' build
+          idf.py --preview -C examples/expansion build
+      - name: Test the EEPROM decoder
+        run: |
+          source "$RUNNER_TEMP/esp-idf/export.sh"
+          python3 tests/test_baseboard.py -v
+      - name: Package the component
+        run: |
+          source "$RUNNER_TEMP/esp-idf/export.sh"
+          compote component pack --project-dir components/candis --name candis --dest-dir "$RUNNER_TEMP/candis-package"
+      - name: Check whitespace
+        run: git show --format= --check HEAD

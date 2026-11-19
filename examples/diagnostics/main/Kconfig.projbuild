@@ -1,0 +1,32 @@
+menu "Candis diagnostics"
+
+config CANDIS_DIAGNOSTICS_STORAGE
+    bool "Mount the card and list its root directory"
+    default n
+
+config CANDIS_DIAGNOSTICS_FIXTURE
+    bool "Use the Candis validation fixture card detect pin"
+    depends on CANDIS_DIAGNOSTICS_STORAGE
+    default n
+
+config CANDIS_DIAGNOSTICS_DC1SW
+    bool "Permit the diagnostic to enable DC1SW"
+    depends on CANDIS_DIAGNOSTICS_STORAGE
+    default n
+
+config CANDIS_DIAGNOSTICS_OTG
+    bool "Run an echo test on the Candis USB OTG port"
+    select TINYUSB_CDC_ENABLED
+    default n
+
+config CANDIS_DIAGNOSTICS_AUDIO
+    bool "Exercise the codec and its two PCM channels"
+    depends on CANDIS_AUDIO
+    default n
+
+config CANDIS_DIAGNOSTICS_PLAYBACK
+    bool "Emit a short playback test through both speakers"
+    depends on CANDIS_DIAGNOSTICS_AUDIO
+    default n
+
+endmenu

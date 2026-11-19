@@ -1,0 +1,149 @@
+dependencies:
+  candis:
+    dependencies:
+    - name: idf
+      version: '>=6.2,<6.3'
+    - name: espressif/esp_lcd_touch_cst9220
+      version: 0.1.2
+    - name: espressif/esp_lvgl_port
+      version: 2.9.0
+    - name: lvgl/lvgl
+      public: true
+      version: 9.6.0~1
+    - name: espressif/esp_codec_dev
+      version: 1.6.2
+    source:
+      path: ../../components/candis
+      type: local
+    targets:
+    - esp32s31
+    version: 0.1.0
+  candis_bb:
+    dependencies:
+    - name: idf
+      version: '>=6.2,<6.3'
+    - name: candis
+      path: ../candis
+      public: true
+    source:
+      path: ../../components/candis_bb
+      type: local
+    targets:
+    - esp32s31
+    version: 0.1.0
+  candis_gamepad:
+    dependencies:
+    - name: idf
+      version: '>=6.2,<6.3'
+    - name: candis
+      path: ../candis
+      public: true
+    source:
+      path: ../../components/candis_gamepad
+      type: local
+    targets:
+    - esp32s31
+    version: 0.1.0
+  espressif/cmake_utilities:
+    component_hash: 351350613ceafba240b761b4ea991e0f231ac7a9f59a9ee901f751bddc0bb18f
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.1'
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    version: 0.5.3
+  espressif/esp_codec_dev:
+    component_hash: 4779f31a3ba3f9b38aee1afe6ccb9ba8f6108dc3a6e77d39d7d714e9a215371b
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.6.2
+  espressif/esp_lcd_touch:
+    component_hash: 3f85a7d95af876f1a6ecca8eb90a81614890d0f03a038390804e5a77e2caf862
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.4.2'
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    version: 1.2.1
+  espressif/esp_lcd_touch_cst9220:
+    component_hash: 588f263e0aea244863610204a1561135d9750cf9bb2b148c86fa5de0769d9d59
+    dependencies:
+    - name: espressif/cmake_utilities
+      registry_url: https://components.espressif.com
+      require: private
+      version: 0.*
+    - name: espressif/esp_lcd_touch
+      registry_url: https://components.espressif.com
+      require: public
+      version: ^1.2.0
+    - name: idf
+      require: private
+      version: '>=5.3'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 0.1.2
+  espressif/esp_lvgl_port:
+    component_hash: d3c020b45c3dfc0d1706a83b63a1c34a6eb444a6e935f9afff79f92b7b94dcef
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.2'
+    - name: lvgl/lvgl
+      registry_url: https://components.espressif.com
+      require: public
+      version: '>=8,<10'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 2.9.0
+  idf:
+    source:
+      type: idf
+    version: 6.2.0
+  lvgl/lvgl:
+    component_hash: 7d82410747bbfb319531449749e940f440f8414f041f9eaba13f0d1dd7f58cdd
+    dependencies:
+    - name: espressif/freetype
+      registry_url: https://components.espressif.com
+      require: private
+      rules:
+      - if: idf_version >=5.5 && $CONFIG{LV_USE_FREETYPE} == True
+      version: ^2.14.3
+    - name: espressif/libjpeg-turbo
+      registry_url: https://components.espressif.com
+      require: private
+      rules:
+      - if: idf_version >=5.5 && $CONFIG{LV_USE_LIBJPEG_TURBO} == True
+      version: ^3.1.1
+    - name: espressif/libpng
+      registry_url: https://components.espressif.com
+      require: private
+      rules:
+      - if: idf_version >=5.5 && $CONFIG{LV_USE_LIBPNG} == True
+      version: ^1.6.58
+    - name: espressif/lz4
+      registry_url: https://components.espressif.com
+      require: private
+      rules:
+      - if: idf_version >=5.5 && $CONFIG{LV_USE_LZ4} == True && $CONFIG{LV_USE_LZ4_INTERNAL} == False
+      version: ^1.10.0
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 9.6.0~1
+direct_dependencies:
+- candis_bb
+- candis_gamepad
+manifest_hash: e9e9cd9c9a2ba02ba7669f5fd951ad7b79750e30a3156128d4c8b34f67cee353
+target: esp32s31
+version: 3.0.0
