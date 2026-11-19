@@ -38,6 +38,11 @@ idf.py --preview -C examples/motion build
 `touch_poll_gap_max_us` 表示采样窗口内最长的触摸轮询间隔。
 USB Serial/JTAG 与 Candis USB OTG 是两个接口，烧录时应先核对串口和分区。
 
+摄像头示例启动后在 480×480 AMOLED 上全屏预览 OV5640 画面。综合测试板需接
+摄像头和 AMOLED，默认使用 50 MHz QSPI，要求 ALDO1 已供电。已确认屏电条件的
+台架可叠加 `examples/camera/sdkconfig.bench` 启用 ALDO1 管理和 80 MHz QSPI。
+串口每 5 秒报告采集帧率、面板帧率与出队至面板 DMA 完成用时。
+
 显示复测可在干净的示例配置中叠加 `sdkconfig.bench`（把 `SDKCONFIG_DEFAULTS`
 设为 `sdkconfig.defaults;sdkconfig.bench`）。诊断示例的 `sdkconfig.features`
 打开音频、TF 和 OTG CDC 下载支持。综合测试板 TF 需另外选择 GPIO35 卡检测并按连接负载

@@ -1,0 +1,13 @@
+menu "Candis camera preview"
+
+config CANDIS_CAMERA_MANAGE_PANEL_POWER
+    bool "Allow the example to enable the AMOLED rail"
+    default n
+    help
+        Enable for a measured setup compatible with a nominal 3.3 V ALDO1.
+
+config CANDIS_CAMERA_QSPI_80MHZ
+    bool "Use the characterized 80 MHz QSPI setting"
+    default n
+
+endmenu

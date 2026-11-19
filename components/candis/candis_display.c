@@ -27,6 +27,7 @@ _Static_assert(DRAW_BYTES < 32768 && DRAW_ROWS % 2 == 0, "ST7801/S31 strip size"
 static const char *TAG = "candis_display";
 static atomic_bool s_port_ready;
 static atomic_bool s_active;
+static atomic_bool s_raw_active;
 static atomic_uint s_te_edges;
 static portMUX_TYPE s_stats_lock = portMUX_INITIALIZER_UNLOCKED;
 static struct {
@@ -461,6 +462,7 @@ static esp_err_t ui_create(const candis_display_config_t *config)
 
 static esp_err_t release_display(void)
 {
+    atomic_store(&s_raw_active, false);
     if (s_display.display) {
         if (!lvgl_port_lock(2000)) {
             return ESP_ERR_TIMEOUT;
@@ -542,22 +544,29 @@ static esp_err_t release_display(void)
     return ESP_OK;
 }
 
-static esp_err_t start_display(const candis_display_config_t *config)
+static esp_err_t start_display(const candis_display_config_t *config, bool raw)
 {
     s_display.sync_to_te = config->sync_to_te;
     atomic_store(&s_te_edges, 0);
-    s_display.frame = heap_caps_calloc(FRAME_PIXELS, sizeof(uint16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    s_display.draw = heap_caps_aligned_alloc(LV_DRAW_BUF_ALIGN, DRAW_BYTES, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    if (!raw) {
+        s_display.frame = heap_caps_calloc(FRAME_PIXELS, sizeof(uint16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        s_display.draw = heap_caps_aligned_alloc(LV_DRAW_BUF_ALIGN, DRAW_BYTES, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        ESP_RETURN_ON_FALSE(s_display.frame && s_display.draw, ESP_ERR_NO_MEM, TAG, "LVGL buffers");
+    }
     s_display.transfer[0] = heap_caps_aligned_alloc(64, DRAW_BYTES, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
     s_display.transfer[1] = heap_caps_aligned_alloc(64, DRAW_BYTES, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
     s_display.te = xSemaphoreCreateBinary();
     s_display.dma = xSemaphoreCreateBinary();
-    ESP_RETURN_ON_FALSE(s_display.frame && s_display.draw && s_display.transfer[0] && s_display.transfer[1] &&
+    ESP_RETURN_ON_FALSE(s_display.transfer[0] && s_display.transfer[1] &&
                         s_display.te && s_display.dma, ESP_ERR_NO_MEM, TAG, "display buffers or semaphores");
     s_display.power.rail = CANDIS_RAIL_DISPLAY;
     ESP_RETURN_ON_ERROR(candis_power_acquire(&s_display.power, config->manage_panel_power, 150),
                         TAG, "prepare panel rail");
     ESP_RETURN_ON_ERROR(panel_init(config), TAG, "start panel");
+    if (raw) {
+        atomic_store(&s_raw_active, true);
+        return ESP_OK;
+    }
     if (config->enable_touch) {
         ESP_RETURN_ON_ERROR(touch_init(), TAG, "start touch");
     }
@@ -574,27 +583,58 @@ static esp_err_t start_display(const candis_display_config_t *config)
     return ui_create(config);
 }
 
-esp_err_t candis_display_start(const candis_display_config_t *config, lv_display_t **display)
+static esp_err_t open_display(const candis_display_config_t *config, lv_display_t **display)
 {
-    if (!config || !display || config->brightness_percent > 100) {
+    if (!config || config->brightness_percent > 100) {
         return ESP_ERR_INVALID_ARG;
     }
-    *display = NULL;
+    if (display) {
+        *display = NULL;
+    }
     if (!candis_control_enter()) {
         return ESP_ERR_INVALID_STATE;
     }
-    if (atomic_load(&s_active) || s_display.frame || s_display.te || s_display.dma) {
+    if (atomic_load(&s_active) || atomic_load(&s_raw_active) || s_display.frame || s_display.te || s_display.dma) {
         candis_control_leave();
         return ESP_ERR_INVALID_STATE;
     }
-    esp_err_t err = start_display(config);
+    esp_err_t err = start_display(config, display == NULL);
     if (err == ESP_OK) {
-        *display = s_display.display;
+        if (display) {
+            *display = s_display.display;
+        }
     } else {
         esp_err_t cleanup = release_display();
         if (cleanup != ESP_OK) {
             ESP_LOGE(TAG, "startup cleanup: %s; retry candis_display_stop", esp_err_to_name(cleanup));
         }
+    }
+    candis_control_leave();
+    return err;
+}
+
+esp_err_t candis_display_start(const candis_display_config_t *config, lv_display_t **display)
+{
+    return display ? open_display(config, display) : ESP_ERR_INVALID_ARG;
+}
+
+esp_err_t candis_display_start_raw(const candis_display_config_t *config)
+{
+    return open_display(config, NULL);
+}
+
+esp_err_t candis_display_draw_rgb565(const uint16_t *pixels)
+{
+    if (!pixels) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (!candis_control_enter()) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    esp_err_t err = ESP_ERR_INVALID_STATE;
+    if (atomic_load(&s_raw_active)) {
+        const lv_area_t full = {.x2 = BSP_LCD_H_RES - 1, .y2 = BSP_LCD_V_RES - 1};
+        err = transfer_frame(pixels, &full, 0) ? ESP_OK : ESP_FAIL;
     }
     candis_control_leave();
     return err;
@@ -659,14 +699,27 @@ esp_err_t candis_display_get_stats(candis_display_stats_t *stats)
     if (!stats) {
         return ESP_ERR_INVALID_ARG;
     }
-    if (!bsp_display_lock(2000)) {
+    const bool raw = atomic_load(&s_raw_active);
+    if (raw) {
+        if (!candis_control_enter()) {
+            return ESP_ERR_INVALID_STATE;
+        }
+        if (!atomic_load(&s_raw_active)) {
+            candis_control_leave();
+            return ESP_ERR_INVALID_STATE;
+        }
+    } else if (!bsp_display_lock(2000)) {
         return ESP_ERR_INVALID_STATE;
     }
     portENTER_CRITICAL(&s_stats_lock);
     *stats = s_display.stats;
     portEXIT_CRITICAL(&s_stats_lock);
     stats->te_edges = atomic_load_explicit(&s_te_edges, memory_order_relaxed);
-    bsp_display_unlock();
+    if (raw) {
+        candis_control_leave();
+    } else {
+        bsp_display_unlock();
+    }
     return ESP_OK;
 }
 

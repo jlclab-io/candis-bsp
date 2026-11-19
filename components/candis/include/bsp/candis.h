@@ -56,6 +56,13 @@ typedef struct {
 
 /** Call lifecycle and brightness APIs from a control task outside the LVGL lock. */
 esp_err_t candis_display_start(const candis_display_config_t *config, lv_display_t **display);
+/** Start panel-only mode. Touch and asynchronous LVGL refresh settings are ignored. */
+esp_err_t candis_display_start_raw(const candis_display_config_t *config);
+/** Present a packed, native-endian 480 x 480 RGB565 frame in panel-only mode.
+ * Call from a control task. The caller may reuse pixels when the call returns.
+ * ESP_OK means every panel DMA strip completed.
+ */
+esp_err_t candis_display_draw_rgb565(const uint16_t *pixels);
 esp_err_t candis_display_stop(void);
 esp_err_t bsp_display_brightness_set(int brightness_percent);
 esp_err_t candis_display_get_stats(candis_display_stats_t *stats);

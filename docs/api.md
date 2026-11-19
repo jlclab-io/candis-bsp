@@ -35,6 +35,11 @@ ALDO1 电源条件和台架频率见 [硬件与实测](hardware.md)。
 `candis_display_get_stats()` 返回累计传输成功的帧数、像素数、帧准备时间、等 TE 时间、
 传输时间及错误。用两次快照求差值计算 FPS；比较时使用相同负载、频率和屏上区域。
 
+摄像头等连续 RGB565 源可用 `candis_display_start_raw()` 启动独占面板模式。
+`candis_display_draw_rgb565()` 接收连续的 480×480 本机字节序像素。该调用复用
+TE 同步和分条 DMA，返回后调用方可复用缓冲。两种显示模式都用
+`candis_display_stop()` 释放，并可读取 `candis_display_get_stats()`。
+
 ## 电源与 RTC
 
 `candis_power_read()` 读取 TG28 ALDO1、ALDO2、ALDO3 和 DC1SW 的开关位。返回值表示
@@ -98,4 +103,5 @@ PA 保持关闭。两路麦克风采用 30.5 dB PGA。应用可以在发送静�
 通过主 BSP 的扩展 LDO 租约和共享主 I²C 管理资源。应用初始化 `candis_ov5640_start()` 后，
 通过 `candis_ov5640_device()` 取得 V4L2 节点。停止流、解除帧缓冲映射并关闭节点后，调用
 `candis_ov5640_stop()` 释放 DVP、XCLK 和已持有的电源。示例的 800×600 RGB565 取流使用
-两个 MMAP 缓冲。按当前像素格式解释 RGB565 字节顺序，预览颜色需在相应应用上验收。
+两个 MMAP 缓冲。应用将中心 600×600 区域缩放至 480×480，再将帧送到面板。
+摄像头缓冲在面板写入前归还。DQBUF 到 DMA 完成计时覆盖缩放、TE 等待和传输。

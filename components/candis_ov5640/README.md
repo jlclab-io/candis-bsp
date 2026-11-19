@@ -12,6 +12,12 @@ Build the repository example with ESP-IDF 6.2 for ESP32-S31.
 idf.py --preview -C examples/camera build
 ```
 
+The example shows a live, center-cropped preview on the 480×480 AMOLED.
+Connect the panel and ensure ALDO1 is already powered. The optional
+`sdkconfig.bench` overlay enables panel power management and 80 MHz QSPI
+on a characterized fixture. The serial log reports capture and panel FPS
+and elapsed time from capture dequeue to the final panel DMA completion.
+
 For local development, add `candis_ov5640` to the application's
 `idf_component.yml` with a `path` to `components/candis_ov5640`. The
 component resolves `candis` from the same checkout. Registry installation
