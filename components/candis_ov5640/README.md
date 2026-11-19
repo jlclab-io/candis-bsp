@@ -1,8 +1,8 @@
 # Candis OV5640
 
-Optional OV5640 DVP board support for Candis hardware revision 1.2 with the
-validation fixture. It uses Espressif's `esp_video` and `esp_cam_sensor` and
-shares the Candis PMU and main I²C bus.
+Configurable OV5640 DVP board support for ESP32-S31 using Espressif's
+`esp_video` and `esp_cam_sensor`. The optional Candis preset shares the
+main I²C bus and PMU on Candis hardware revision 1.2 with the validation fixture.
 
 ## Use the component
 
@@ -20,8 +20,9 @@ and elapsed time from capture dequeue to the final panel DMA completion.
 
 For local development, add `candis_ov5640` to the application's
 `idf_component.yml` with a `path` to `components/candis_ov5640`. The
-component resolves `candis` from the same checkout. Registry installation
-depends on a published Candis BSP version.
+fixture preset resolves `candis` from the same checkout. The preset is
+enabled by `CONFIG_CANDIS_OV5640_FIXTURE`. For custom hardware, disable
+that option to build the driver independently of `candis`.
 
 Enable the DVP video device, OV5640 DVP detection and PSRAM.
 See the example's `sdkconfig.defaults` for the 800×600 RGB565 configuration.
@@ -29,6 +30,23 @@ Include `bsp/candis_ov5640.h` and call `candis_ov5640_start()` from a single
 control task. Open the V4L2 node returned by `candis_ov5640_device()` to capture.
 Stop streaming, unmap the frame buffers and close the node before calling
 `candis_ov5640_stop()`.
+
+## Custom wiring
+
+Fill `candis_ov5640_config_t` and call `candis_ov5640_start_with_config()`.
+Supply eight DVP data pins, PCLK, VSYNC, HSYNC and the SCCB frequency.
+Choose a dedicated HP I²C port and pins, or pass an existing bus with both
+SCCB pin fields set to `GPIO_NUM_NC`. With a shared bus, keep it alive until
+stop succeeds. Set unused RESET, PWDN and XCLK pins to `GPIO_NUM_NC`.
+An externally supplied XCLK must be running before sensor detection.
+
+Use an acquire/release callback pair for board-specific power and bus
+ownership. The acquire callback runs while RESET and PWDN are asserted.
+Release runs after the DVP device stops and the sensor is held in reset.
+Release must handle a partial acquisition and retry its unfinished cleanup
+if it returns an error. Reserve the configured pins, LEDC and ESP Video
+DVP instance for the lifetime of the camera. The fixture helper
+`candis_ov5640_fixture_config()` fills a complete tested profile.
 
 ## Hardware and validation
 

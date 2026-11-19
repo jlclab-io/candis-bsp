@@ -2,6 +2,7 @@
 #pragma once
 
 #include "bsp/candis.h"
+#include "candis_board.h"
 
 bool candis_control_enter(void);
 void candis_control_leave(void);

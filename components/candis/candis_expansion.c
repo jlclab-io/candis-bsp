@@ -29,14 +29,14 @@ static esp_err_t read_image(uint8_t *image)
     s_probe.power.rail = CANDIS_RAIL_EXPANSION;
     ESP_RETURN_ON_ERROR(candis_power_acquire(&s_probe.power, false, 0), TAG, "DC1SW required");
     const i2c_master_bus_config_t bus = {
-        .i2c_port = I2C_NUM_1,
-        .scl_io_num = GPIO_NUM_58, .sda_io_num = GPIO_NUM_59,
+        .i2c_port = CANDIS_EXP_I2C,
+        .scl_io_num = CANDIS_EXP_SCL, .sda_io_num = CANDIS_EXP_SDA,
         .clk_source = I2C_CLK_SRC_DEFAULT, .glitch_ignore_cnt = 7,
     };
     ESP_RETURN_ON_ERROR(i2c_new_master_bus(&bus, &s_probe.bus), TAG, "acquire expansion I2C");
-    ESP_RETURN_ON_ERROR(i2c_master_probe(s_probe.bus, 0x50, 30), TAG, "probe expansion EEPROM");
+    ESP_RETURN_ON_ERROR(i2c_master_probe(s_probe.bus, CANDIS_EXP_EEPROM_ADDR, 30), TAG, "probe expansion EEPROM");
     const i2c_device_config_t device = {
-        .dev_addr_length = I2C_ADDR_BIT_LEN_7, .device_address = 0x50, .scl_speed_hz = 100000,
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7, .device_address = CANDIS_EXP_EEPROM_ADDR, .scl_speed_hz = 100000,
     };
     ESP_RETURN_ON_ERROR(i2c_master_bus_add_device(s_probe.bus, &device, &s_probe.eeprom), TAG, "add EEPROM");
     const uint8_t address = 0;

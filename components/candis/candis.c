@@ -22,9 +22,9 @@ esp_err_t candis_i2c_acquire_locked(i2c_master_bus_handle_t *bus)
 {
     if (s_users == 0) {
         const i2c_master_bus_config_t config = {
-            .i2c_port = I2C_NUM_0,
-            .sda_io_num = BSP_I2C_SDA,
-            .scl_io_num = BSP_I2C_SCL,
+            .i2c_port = CANDIS_MAIN_I2C,
+            .sda_io_num = CANDIS_MAIN_SDA,
+            .scl_io_num = CANDIS_MAIN_SCL,
             .clk_source = I2C_CLK_SRC_DEFAULT,
             .glitch_ignore_cnt = 7,
         };

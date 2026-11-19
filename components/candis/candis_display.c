@@ -16,9 +16,6 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 
-#define PANEL_HOST SPI2_HOST
-#define PANEL_RESET GPIO_NUM_2
-#define PANEL_TE GPIO_NUM_8
 #define DRAW_ROWS 32
 #define DRAW_BYTES (BSP_LCD_H_RES * DRAW_ROWS * sizeof(uint16_t))
 #define FRAME_PIXELS (BSP_LCD_H_RES * BSP_LCD_V_RES)
@@ -110,30 +107,30 @@ static bool dma_done(esp_lcd_panel_io_handle_t io, esp_lcd_panel_io_event_data_t
 static esp_err_t panel_init(const candis_display_config_t *config)
 {
     const spi_bus_config_t bus = {
-        .sclk_io_num = GPIO_NUM_12,
-        .data0_io_num = GPIO_NUM_11, .data1_io_num = GPIO_NUM_13,
-        .data2_io_num = GPIO_NUM_14, .data3_io_num = GPIO_NUM_9,
+        .sclk_io_num = CANDIS_LCD_CLK,
+        .data0_io_num = CANDIS_LCD_D0, .data1_io_num = CANDIS_LCD_D1,
+        .data2_io_num = CANDIS_LCD_D2, .data3_io_num = CANDIS_LCD_D3,
         .data4_io_num = -1, .data5_io_num = -1, .data6_io_num = -1, .data7_io_num = -1,
         .max_transfer_sz = DRAW_BYTES,
     };
-    ESP_RETURN_ON_ERROR(spi_bus_initialize(PANEL_HOST, &bus, SPI_DMA_CH_AUTO), TAG, "init QSPI");
+    ESP_RETURN_ON_ERROR(spi_bus_initialize(CANDIS_LCD_SPI, &bus, SPI_DMA_CH_AUTO), TAG, "init QSPI");
     s_display.spi = true;
     const esp_lcd_panel_io_spi_config_t io = {
-        .cs_gpio_num = GPIO_NUM_10, .dc_gpio_num = -1,
+        .cs_gpio_num = CANDIS_LCD_CS, .dc_gpio_num = -1,
         .pclk_hz = config->bench_qspi_80mhz ? 80000000 : 50000000,
         .trans_queue_depth = 1,
         .on_color_trans_done = dma_done, .user_ctx = s_display.dma,
         .lcd_cmd_bits = 32, .lcd_param_bits = 8,
         .flags.quad_mode = true,
     };
-    ESP_RETURN_ON_ERROR(esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)PANEL_HOST, &io,
+    ESP_RETURN_ON_ERROR(esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)CANDIS_LCD_SPI, &io,
                                                 &s_display.panel_io), TAG, "init panel IO");
-    const gpio_config_t reset = {.pin_bit_mask = 1ULL << PANEL_RESET, .mode = GPIO_MODE_OUTPUT};
-    ESP_RETURN_ON_ERROR(gpio_set_level(PANEL_RESET, 0), TAG, "preset reset output");
+    const gpio_config_t reset = {.pin_bit_mask = 1ULL << CANDIS_LCD_RESET, .mode = GPIO_MODE_OUTPUT};
+    ESP_RETURN_ON_ERROR(gpio_set_level(CANDIS_LCD_RESET, 0), TAG, "preset reset output");
     ESP_RETURN_ON_ERROR(gpio_config(&reset), TAG, "init panel reset");
     s_display.reset_pin = true;
     vTaskDelay(pdMS_TO_TICKS(10) + 1);
-    ESP_RETURN_ON_ERROR(gpio_set_level(PANEL_RESET, 1), TAG, "release panel reset");
+    ESP_RETURN_ON_ERROR(gpio_set_level(CANDIS_LCD_RESET, 1), TAG, "release panel reset");
     vTaskDelay(pdMS_TO_TICKS(150) + 1);
 
     /* AM214Q480480LK2 power-up command order from the validated Bring-Up settings. */
@@ -157,7 +154,7 @@ static esp_err_t panel_init(const candis_display_config_t *config)
     ESP_RETURN_ON_ERROR(panel_command(LCD_CMD_DISPON, NULL, 0), TAG, "DISPON");
 
     const gpio_config_t te = {
-        .pin_bit_mask = 1ULL << PANEL_TE, .mode = GPIO_MODE_INPUT,
+        .pin_bit_mask = 1ULL << CANDIS_LCD_TE, .mode = GPIO_MODE_INPUT,
         .intr_type = GPIO_INTR_POSEDGE,
     };
     ESP_RETURN_ON_ERROR(gpio_config(&te), TAG, "init TE pin");
@@ -166,7 +163,7 @@ static esp_err_t panel_init(const candis_display_config_t *config)
     if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
         return err;
     }
-    ESP_RETURN_ON_ERROR(gpio_isr_handler_add(PANEL_TE, te_edge, s_display.te), TAG, "register TE ISR");
+    ESP_RETURN_ON_ERROR(gpio_isr_handler_add(CANDIS_LCD_TE, te_edge, s_display.te), TAG, "register TE ISR");
     s_display.te_handler = true;
     return ESP_OK;
 }
@@ -386,12 +383,13 @@ static void read_touch(lv_indev_t *input, lv_indev_data_t *data)
 
 static esp_err_t touch_init(void)
 {
-    const esp_lcd_panel_io_i2c_config_t io = ESP_LCD_TOUCH_IO_I2C_CST9220_CONFIG();
+    esp_lcd_panel_io_i2c_config_t io = ESP_LCD_TOUCH_IO_I2C_CST9220_CONFIG();
+    io.dev_addr = CANDIS_TOUCH_ADDR;
     ESP_RETURN_ON_ERROR(esp_lcd_new_panel_io_i2c(s_display.power.bus, &io, &s_display.touch_io),
                         TAG, "init touch IO");
     const esp_lcd_touch_config_t config = {
         .x_max = BSP_LCD_H_RES, .y_max = BSP_LCD_V_RES,
-        .rst_gpio_num = GPIO_NUM_3, .int_gpio_num = GPIO_NUM_1,
+        .rst_gpio_num = CANDIS_TOUCH_RESET, .int_gpio_num = CANDIS_TOUCH_INT,
         .flags.mirror_x = true, .flags.mirror_y = true,
     };
     return esp_lcd_touch_new_i2c_cst9220(s_display.touch_io, &config, &s_display.touch);
@@ -492,11 +490,11 @@ static esp_err_t release_display(void)
     }
     ESP_RETURN_ON_FALSE(drain_dma(), ESP_ERR_TIMEOUT, TAG, "panel DMA still pending");
     if (s_display.te_handler) {
-        ESP_RETURN_ON_ERROR(gpio_isr_handler_remove(PANEL_TE), TAG, "remove TE handler");
+        ESP_RETURN_ON_ERROR(gpio_isr_handler_remove(CANDIS_LCD_TE), TAG, "remove TE handler");
         s_display.te_handler = false;
     }
     if (s_display.te_pin) {
-        ESP_RETURN_ON_ERROR(gpio_reset_pin(PANEL_TE), TAG, "release TE pin");
+        ESP_RETURN_ON_ERROR(gpio_reset_pin(CANDIS_LCD_TE), TAG, "release TE pin");
         s_display.te_pin = false;
     }
     if (s_display.touch) {
@@ -518,11 +516,11 @@ static esp_err_t release_display(void)
         s_display.panel_io = NULL;
     }
     if (s_display.spi) {
-        ESP_RETURN_ON_ERROR(spi_bus_free(PANEL_HOST), TAG, "release QSPI");
+        ESP_RETURN_ON_ERROR(spi_bus_free(CANDIS_LCD_SPI), TAG, "release QSPI");
         s_display.spi = false;
     }
     if (s_display.reset_pin) {
-        ESP_RETURN_ON_ERROR(gpio_reset_pin(PANEL_RESET), TAG, "release reset pin");
+        ESP_RETURN_ON_ERROR(gpio_reset_pin(CANDIS_LCD_RESET), TAG, "release reset pin");
         s_display.reset_pin = false;
     }
     ESP_RETURN_ON_ERROR(candis_power_release(&s_display.power), TAG, "release panel rail");

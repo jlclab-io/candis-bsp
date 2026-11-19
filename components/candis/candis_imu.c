@@ -19,7 +19,7 @@ static bool s_measuring;
 static esp_err_t enable_measurements(void)
 {
     const bmi270_driver_config_t driver = {
-        .addr = BMI270_I2C_ADDRESS_L,
+        .addr = CANDIS_IMU_ADDR,
         .interface = BMI270_USE_I2C,
         .i2c_bus = s_power.bus,
     };

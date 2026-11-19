@@ -163,7 +163,7 @@ class ExpansionPowerTest(unittest.TestCase):
             source.write_text(TEST_SOURCE)
             idf = Path(os.environ['IDF_PATH'])
             executable = root / 'test_expansion_power'
-            subprocess.run(['cc', '-std=c11', '-Wall', '-Werror', f'-I{root}', f"-I{COMPONENT / 'include'}",
+            subprocess.run(['cc', '-std=c11', '-Wall', '-Werror', f'-I{root}', f'-I{COMPONENT}', f"-I{COMPONENT / 'include'}",
                             f"-I{idf / 'components/esp_common/include'}", str(driver), str(source),
                             '-o', str(executable)], check=True)
             subprocess.run([str(executable)], check=True)

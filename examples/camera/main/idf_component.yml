@@ -1,4 +1,6 @@
 dependencies:
+  candis:
+    path: ../../../components/candis
   candis_ov5640:
     path: ../../../components/candis_ov5640
   espressif/esp_video: "2.5.0"

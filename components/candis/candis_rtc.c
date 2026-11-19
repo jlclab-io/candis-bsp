@@ -8,7 +8,6 @@
 #include "freertos/task.h"
 
 enum {
-    RX8130_ADDRESS = 0x32,
     RX8130_CALENDAR = 0x10,
     RX8130_EXTENSION = 0x1c,
     RX8130_FLAGS = 0x1d,
@@ -117,7 +116,7 @@ static esp_err_t read_calendar(struct tm *utc)
 static esp_err_t open_rtc(void)
 {
     const i2c_device_config_t config = {
-        .dev_addr_length = I2C_ADDR_BIT_LEN_7, .device_address = RX8130_ADDRESS, .scl_speed_hz = 100000,
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7, .device_address = CANDIS_RTC_ADDR, .scl_speed_hz = 100000,
     };
     if (!s_bus) {
         ESP_RETURN_ON_ERROR(candis_i2c_acquire_locked(&s_bus), TAG, "acquire main I2C");

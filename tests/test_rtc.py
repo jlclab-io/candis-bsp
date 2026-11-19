@@ -171,7 +171,7 @@ class RtcDriverTest(unittest.TestCase):
         with TemporaryDirectory() as work:
             root = Path(work)
             (root / "sdkconfig.h").write_text("#define CONFIG_COMPILER_OPTIMIZATION_PERF 0\n")
-            (root / "candis_internal.h").write_text(I2C_HEADER)
+            (root / "candis_internal.h").write_text(I2C_HEADER + '\n#include "candis_board.h"\n')
             (root / "esp_check.h").write_text(
                 "#define ESP_LOGW(tag, ...) do { (void)(tag); } while (0)\n"
                 "#define ESP_LOGE(tag, ...) ESP_LOGW(tag, __VA_ARGS__)\n"
@@ -187,7 +187,7 @@ class RtcDriverTest(unittest.TestCase):
             source.write_text(TEST_SOURCE)
             idf = Path(os.environ["IDF_PATH"])
             executable = root / "test_rtc"
-            subprocess.run(["cc", "-std=c11", "-Wall", "-Werror", f"-I{root}", f"-I{COMPONENT / 'include'}",
+            subprocess.run(["cc", "-std=c11", "-Wall", "-Werror", f"-I{root}", f"-I{COMPONENT}", f"-I{COMPONENT / 'include'}",
                             f"-I{idf / 'components/esp_common/include'}", str(driver), str(source),
                             "-o", str(executable)], check=True)
             subprocess.run([str(executable)], check=True)

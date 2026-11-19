@@ -6,7 +6,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#define TG28_ADDRESS 0x34
 #define TG28_REG_ENABLE 0x90
 #define TG28_ALDO1_VOLTAGE 0x92
 #define TG28_ALDO2_VOLTAGE 0x93
@@ -53,7 +52,7 @@ static esp_err_t update_reg(i2c_master_dev_handle_t pmu, uint8_t reg, uint8_t ma
 static esp_err_t open_pmu(candis_power_t *lease)
 {
     const i2c_device_config_t config = {
-        .dev_addr_length = I2C_ADDR_BIT_LEN_7, .device_address = TG28_ADDRESS, .scl_speed_hz = 100000,
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7, .device_address = CANDIS_PMU_ADDR, .scl_speed_hz = 100000,
     };
     ESP_RETURN_ON_ERROR(candis_i2c_acquire_locked(&lease->bus), TAG, "acquire main I2C");
     return i2c_master_bus_add_device(lease->bus, &config, &lease->pmu);

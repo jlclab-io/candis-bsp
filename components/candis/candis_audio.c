@@ -12,9 +12,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#define PA_ENABLE GPIO_NUM_4
 #define FRAME_BYTES (sizeof(int16_t) * CANDIS_AUDIO_CHANNELS)
-#define CODEC_ADDRESS 0x10
 #define MCLK_MULTIPLE 256
 #define MIC_GAIN_REQUEST_DB 30
 #define ES8389_PGA_LEFT 0x72
@@ -71,8 +69,8 @@ static esp_err_t open_channels(void)
         .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(CANDIS_AUDIO_RATE),
         .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO),
         .gpio_cfg = {
-            .mclk = GPIO_NUM_15, .bclk = GPIO_NUM_16, .ws = GPIO_NUM_17,
-            .dout = GPIO_NUM_18, .din = GPIO_NUM_19,
+            .mclk = CANDIS_I2S_MCLK, .bclk = CANDIS_I2S_BCLK, .ws = CANDIS_I2S_WS,
+            .dout = CANDIS_I2S_DOUT, .din = CANDIS_I2S_DIN,
         },
     };
     ESP_RETURN_ON_ERROR(i2s_channel_init_std_mode(s_audio.tx, &config), TAG, "configure I2S TX");
@@ -83,10 +81,10 @@ static esp_err_t open_channels(void)
 
 static esp_err_t open_codec(void)
 {
-    ESP_RETURN_ON_ERROR(i2c_master_probe(s_audio.power.bus, CODEC_ADDRESS, 100), TAG, "probe ES8389");
+    ESP_RETURN_ON_ERROR(i2c_master_probe(s_audio.power.bus, CANDIS_CODEC_ADDR, 100), TAG, "probe ES8389");
     audio_codec_i2c_cfg_t bus = {
         /* The codec component uses the address byte, including the R/W bit position. */
-        .bus_handle = s_audio.power.bus, .addr = CODEC_ADDRESS << 1, .clock_speed_hz = 100000,
+        .bus_handle = s_audio.power.bus, .addr = CANDIS_CODEC_ADDR << 1, .clock_speed_hz = 100000,
     };
     s_audio.i2c = audio_codec_new_i2c_ctrl(&bus);
     ESP_RETURN_ON_FALSE(s_audio.i2c, ESP_ERR_NO_MEM, TAG, "create ES8389 control");
@@ -153,7 +151,7 @@ static esp_err_t release_audio(void)
     s_audio.open = false;
     atomic_store(&s_audio.output_enabled, false);
     if (s_audio.pa_configured) {
-        ESP_RETURN_ON_ERROR(gpio_set_level(PA_ENABLE, 0), TAG, "turn amplifier off");
+        ESP_RETURN_ON_ERROR(gpio_set_level(CANDIS_PA_ENABLE, 0), TAG, "turn amplifier off");
     }
     if (s_audio.pcm) {
         esp_codec_dev_delete(s_audio.pcm);
@@ -175,7 +173,7 @@ static esp_err_t release_audio(void)
     ESP_RETURN_ON_ERROR(release_channel(&s_audio.tx), TAG, "release I2S TX");
     ESP_RETURN_ON_ERROR(candis_power_release(&s_audio.power), TAG, "release ALDO2");
     if (s_audio.pa_configured) {
-        ESP_RETURN_ON_ERROR(gpio_reset_pin(PA_ENABLE), TAG, "release amplifier pin");
+        ESP_RETURN_ON_ERROR(gpio_reset_pin(CANDIS_PA_ENABLE), TAG, "release amplifier pin");
         s_audio.pa_configured = false;
     }
     s_audio.volume = 0;
@@ -184,8 +182,8 @@ static esp_err_t release_audio(void)
 
 static esp_err_t start_audio(bool manage_power)
 {
-    const gpio_config_t pa = {.pin_bit_mask = 1ULL << PA_ENABLE, .mode = GPIO_MODE_OUTPUT};
-    ESP_RETURN_ON_ERROR(gpio_set_level(PA_ENABLE, 0), TAG, "preset amplifier GPIO");
+    const gpio_config_t pa = {.pin_bit_mask = 1ULL << CANDIS_PA_ENABLE, .mode = GPIO_MODE_OUTPUT};
+    ESP_RETURN_ON_ERROR(gpio_set_level(CANDIS_PA_ENABLE, 0), TAG, "preset amplifier GPIO");
     ESP_RETURN_ON_ERROR(gpio_config(&pa), TAG, "configure amplifier GPIO");
     s_audio.pa_configured = true;
     s_audio.power.rail = CANDIS_RAIL_AUDIO;
@@ -222,7 +220,7 @@ esp_err_t candis_audio_set_volume(unsigned volume)
     }
     if (!volume) {
         atomic_store(&s_audio.output_enabled, false);
-        ESP_RETURN_ON_ERROR(gpio_set_level(PA_ENABLE, 0), TAG, "mute power amplifier");
+        ESP_RETURN_ON_ERROR(gpio_set_level(CANDIS_PA_ENABLE, 0), TAG, "mute power amplifier");
     }
     esp_err_t result = set_codec_volume(volume);
     if (result == ESP_ERR_INVALID_RESPONSE) {
@@ -241,7 +239,7 @@ esp_err_t candis_audio_set_output(bool on)
         return ESP_ERR_INVALID_STATE;
     }
     atomic_store(&s_audio.output_enabled, false);
-    ESP_RETURN_ON_ERROR(gpio_set_level(PA_ENABLE, on), TAG, "set power amplifier state");
+    ESP_RETURN_ON_ERROR(gpio_set_level(CANDIS_PA_ENABLE, on), TAG, "set power amplifier state");
     if (on) {
         vTaskDelay(pdMS_TO_TICKS(120) + 1);
         atomic_store(&s_audio.output_enabled, true);
