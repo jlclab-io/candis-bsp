@@ -28,6 +28,7 @@ Stop streaming, unmap the frame buffers and close the node before calling
 
 - The validation fixture uses GPIO39 for RESET, GPIO40 for PWDN and GPIO46–57
   for DVP and XCLK. It uses BLDO1, ALDO4 and ALDO3 for the sensor supplies.
+  PWDN uses open-drain control with the fixture's pull-up to 2.8 V DOVDD.
   Reserve those pins, rails, LEDC timer 1 and LEDC channel 1 for the
   validation fixture while capturing.
   The formal expansion boards can use GPIO39 for TF card detection and

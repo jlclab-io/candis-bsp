@@ -11,9 +11,9 @@ esp_err_t candis_i2c_release_locked(i2c_master_bus_handle_t bus);
 typedef enum {
     CANDIS_RAIL_DISPLAY = 0x01,
     CANDIS_RAIL_AUDIO = 0x02,
-    CANDIS_RAIL_FIXTURE_CAMERA_CORE = 0x04,
-    CANDIS_RAIL_FIXTURE_CAMERA_ANALOG = 0x08,
-    CANDIS_RAIL_FIXTURE_CAMERA_IO = 0x10,
+    CANDIS_RAIL_ALDO3 = 0x04,
+    CANDIS_RAIL_ALDO4 = 0x08,
+    CANDIS_RAIL_BLDO1 = 0x10,
     CANDIS_RAIL_EXPANSION = 0x80,
 } candis_rail_t;
 

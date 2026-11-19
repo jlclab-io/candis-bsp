@@ -13,7 +13,6 @@
 #define TG28_ALDO3_VOLTAGE 0x94
 #define TG28_ALDO4_VOLTAGE 0x95
 #define TG28_BLDO1_VOLTAGE 0x96
-#define TG28_ALDO3_ENABLE 0x04
 #define TG28_VOLTAGE_MASK 0x1f
 #define TG28_VOLTAGE_CODE(mv) (((mv) - 500) / 100)
 #define TG28_TIMEOUT_MS 100
@@ -22,15 +21,20 @@ static const char *TAG = "candis_power";
 static candis_power_t s_expansion = {.rail = CANDIS_RAIL_EXPANSION};
 static unsigned s_expansion_users;
 static bool s_expansion_cleanup;
-static const struct {
-    uint8_t reg;
-    uint8_t code;
-} s_voltage[] = {
-    [CANDIS_RAIL_DISPLAY] = {TG28_ALDO1_VOLTAGE, TG28_VOLTAGE_CODE(3300)},
-    [CANDIS_RAIL_AUDIO] = {TG28_ALDO2_VOLTAGE, TG28_VOLTAGE_CODE(3300)},
-    [CANDIS_RAIL_FIXTURE_CAMERA_CORE] = {TG28_ALDO3_VOLTAGE, TG28_VOLTAGE_CODE(1500)},
-    [CANDIS_RAIL_FIXTURE_CAMERA_ANALOG] = {TG28_ALDO4_VOLTAGE, TG28_VOLTAGE_CODE(2800)},
-    [CANDIS_RAIL_FIXTURE_CAMERA_IO] = {TG28_BLDO1_VOLTAGE, TG28_VOLTAGE_CODE(2800)},
+static const uint8_t s_voltage_reg[] = {
+    [CANDIS_RAIL_DISPLAY] = TG28_ALDO1_VOLTAGE,
+    [CANDIS_RAIL_AUDIO] = TG28_ALDO2_VOLTAGE,
+    [CANDIS_RAIL_ALDO3] = TG28_ALDO3_VOLTAGE,
+    [CANDIS_RAIL_ALDO4] = TG28_ALDO4_VOLTAGE,
+    [CANDIS_RAIL_BLDO1] = TG28_BLDO1_VOLTAGE,
+};
+
+static struct candis_expansion_ldo_lease {
+    candis_power_t power;
+} s_expansion_ldos[] = {
+    [CANDIS_EXPANSION_ALDO3] = {.power.rail = CANDIS_RAIL_ALDO3},
+    [CANDIS_EXPANSION_ALDO4] = {.power.rail = CANDIS_RAIL_ALDO4},
+    [CANDIS_EXPANSION_BLDO1] = {.power.rail = CANDIS_RAIL_BLDO1},
 };
 
 static esp_err_t read_reg(i2c_master_dev_handle_t pmu, uint8_t reg, uint8_t *value)
@@ -55,16 +59,20 @@ static esp_err_t open_pmu(candis_power_t *lease)
     return i2c_master_bus_add_device(lease->bus, &config, &lease->pmu);
 }
 
-static esp_err_t acquire_rail(candis_power_t *lease, bool manage, unsigned settle_ms)
+static esp_err_t acquire_rail(candis_power_t *lease, bool manage, unsigned settle_ms, uint8_t target)
 {
     /* The caller holds the board control lock for all PMU register updates. */
     ESP_RETURN_ON_ERROR(open_pmu(lease), TAG, "open TG28 device");
     uint8_t enabled;
-    ESP_RETURN_ON_ERROR(read_reg(lease->pmu, TG28_REG_ENABLE, &enabled), TAG, "read rail state");
+    esp_err_t err = read_reg(lease->pmu, TG28_REG_ENABLE, &enabled);
+    if (err == ESP_ERR_INVALID_RESPONSE) {
+        /* The first status read can NACK immediately after boot. No writes have run. */
+        vTaskDelay(pdMS_TO_TICKS(5) + 1);
+        err = read_reg(lease->pmu, TG28_REG_ENABLE, &enabled);
+    }
+    ESP_RETURN_ON_ERROR(err, TAG, "read rail state");
     const unsigned index = lease->rail;
-    const bool has_voltage = index < sizeof(s_voltage) / sizeof(s_voltage[0]);
-    const uint8_t voltage_reg = has_voltage ? s_voltage[index].reg : 0;
-    const uint8_t target = has_voltage ? s_voltage[index].code : 0;
+    const uint8_t voltage_reg = index < sizeof(s_voltage_reg) ? s_voltage_reg[index] : 0;
     uint8_t voltage = target;
     if (voltage_reg) {
         ESP_RETURN_ON_ERROR(read_reg(lease->pmu, voltage_reg, &voltage), TAG, "read rail voltage");
@@ -73,7 +81,7 @@ static esp_err_t acquire_rail(candis_power_t *lease, bool manage, unsigned settl
         return (voltage & TG28_VOLTAGE_MASK) == target ? ESP_OK : ESP_ERR_INVALID_STATE;
     }
     ESP_RETURN_ON_FALSE(manage, ESP_ERR_INVALID_STATE, TAG, "requested rail is off");
-    ESP_RETURN_ON_FALSE(lease->rail != CANDIS_RAIL_EXPANSION || !(enabled & TG28_ALDO3_ENABLE),
+    ESP_RETURN_ON_FALSE(lease->rail != CANDIS_RAIL_EXPANSION || !(enabled & CANDIS_RAIL_ALDO3),
                         ESP_ERR_INVALID_STATE, TAG, "DC1SW is off while ALDO3 is on");
     if (voltage_reg && (voltage & TG28_VOLTAGE_MASK) != target) {
         lease->voltage_reg = voltage_reg;
@@ -100,7 +108,7 @@ static esp_err_t release_rail(candis_power_t *lease)
         if (lease->rail == CANDIS_RAIL_EXPANSION) {
             uint8_t enabled;
             ESP_RETURN_ON_ERROR(read_reg(lease->pmu, TG28_REG_ENABLE, &enabled), TAG, "read DC1SW and ALDO3");
-            ESP_RETURN_ON_FALSE(!(enabled & TG28_ALDO3_ENABLE), ESP_ERR_INVALID_STATE, TAG, "ALDO3 is still on");
+            ESP_RETURN_ON_FALSE(!(enabled & CANDIS_RAIL_ALDO3), ESP_ERR_INVALID_STATE, TAG, "ALDO3 is still on");
         }
         ESP_RETURN_ON_ERROR(update_reg(lease->pmu, TG28_REG_ENABLE, lease->rail, 0), TAG, "disable rail");
         lease->owned = false;
@@ -124,14 +132,14 @@ static esp_err_t release_rail(candis_power_t *lease)
 esp_err_t candis_power_acquire(candis_power_t *lease, bool manage, unsigned settle_ms)
 {
     if (lease->rail != CANDIS_RAIL_EXPANSION) {
-        return acquire_rail(lease, manage, settle_ms);
+        return acquire_rail(lease, manage, settle_ms, TG28_VOLTAGE_CODE(3300));
     }
     if (lease->bus || s_expansion_cleanup) {
         return ESP_ERR_INVALID_STATE;
     }
     esp_err_t result = ESP_OK;
     if (s_expansion_users == 0) {
-        result = acquire_rail(&s_expansion, manage, settle_ms);
+        result = acquire_rail(&s_expansion, manage, settle_ms, 0);
         if (!s_expansion.bus) {
             return result;
         }
@@ -161,6 +169,51 @@ esp_err_t candis_power_release(candis_power_t *lease)
     return ESP_OK;
 }
 
+esp_err_t candis_expansion_ldo_acquire(candis_expansion_ldo_t rail, uint16_t voltage_mv, unsigned settle_ms,
+                                      candis_expansion_ldo_handle_t *handle)
+{
+    if (!handle) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    *handle = NULL;
+    if ((unsigned)rail >= sizeof(s_expansion_ldos) / sizeof(s_expansion_ldos[0]) ||
+        voltage_mv < 500 || voltage_mv > 3500 || voltage_mv % 100) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (!candis_control_enter()) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    candis_power_t *power = &s_expansion_ldos[rail].power;
+    esp_err_t err = ESP_ERR_INVALID_STATE;
+    if (!power->bus) {
+        err = acquire_rail(power, true, settle_ms, TG28_VOLTAGE_CODE(voltage_mv));
+        if (err != ESP_OK) {
+            esp_err_t cleanup = candis_power_release(power);
+            if (cleanup != ESP_OK) {
+                ESP_LOGE(TAG, "Unable to roll back expansion LDO: %s", esp_err_to_name(cleanup));
+            }
+        }
+        if (power->bus) {
+            *handle = &s_expansion_ldos[rail];
+        }
+    }
+    candis_control_leave();
+    return err;
+}
+
+esp_err_t candis_expansion_ldo_release(candis_expansion_ldo_handle_t handle)
+{
+    if (!handle) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (!candis_control_enter()) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    esp_err_t err = candis_power_release(&handle->power);
+    candis_control_leave();
+    return err;
+}
+
 esp_err_t candis_power_read(candis_power_state_t *state)
 {
     static candis_power_t lease;
@@ -186,7 +239,7 @@ esp_err_t candis_power_read(candis_power_state_t *state)
         *state = (candis_power_state_t){
             .panel = !!(enabled & CANDIS_RAIL_DISPLAY),
             .audio = !!(enabled & CANDIS_RAIL_AUDIO),
-            .aldo3 = !!(enabled & TG28_ALDO3_ENABLE),
+            .aldo3 = !!(enabled & CANDIS_RAIL_ALDO3),
             .dc1sw = !!(enabled & CANDIS_RAIL_EXPANSION),
         };
     }

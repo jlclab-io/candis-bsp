@@ -13,12 +13,16 @@ COMPONENT = Path(__file__).resolve().parents[1] / 'components/candis'
 
 TEST_SOURCE = """
 #include <assert.h>
+#include "bsp/candis_power.h"
 #include "candis_internal.h"
 
 enum { DC1SW = 0x80, ALDO3 = 0x04 };
-static uint8_t enables;
+static uint8_t registers[256];
+#define enables registers[0x90]
 static unsigned bus_users;
 static unsigned writes;
+static bool nack_next_read;
+static bool fail_enable, fail_rollback;
 
 bool candis_control_enter(void) { return true; }
 void candis_control_leave(void) { }
@@ -54,17 +58,24 @@ esp_err_t i2c_master_bus_rm_device(i2c_master_dev_handle_t dev)
 esp_err_t i2c_master_transmit_receive(i2c_master_dev_handle_t dev, const uint8_t *reg, size_t reg_size,
                                      uint8_t *output, size_t size, int timeout)
 {
-    assert(dev == &enables && reg_size == 1 && *reg == 0x90 && size == 1);
-    *output = enables;
+    assert(dev == &enables && reg_size == 1 && size == 1);
+    if (nack_next_read) {
+        nack_next_read = false;
+        return ESP_ERR_INVALID_RESPONSE;
+    }
+    *output = registers[*reg];
     return ESP_OK;
 }
 
 esp_err_t i2c_master_transmit(i2c_master_dev_handle_t dev, const uint8_t *data, size_t size, int timeout)
 {
-    assert(dev == &enables && size == 2 && data[0] == 0x90);
-    enables = data[1];
+    assert(dev == &enables && size == 2);
+    if (data[0] == 0x90 && data[1] == 0 && fail_rollback) {
+        return ESP_FAIL;
+    }
+    registers[data[0]] = data[1];
     ++writes;
-    return ESP_OK;
+    return (data[0] == 0x90 && data[1] == ALDO3 && fail_enable) ? ESP_FAIL : ESP_OK;
 }
 
 int main(void)
@@ -97,6 +108,33 @@ int main(void)
     assert(candis_power_acquire(&second, false, 20) == ESP_ERR_INVALID_STATE);
     enables &= ~ALDO3;
     assert(candis_power_release(&first) == ESP_OK && !enables && !bus_users);
+
+    candis_expansion_ldo_handle_t ldo = NULL;
+    candis_expansion_ldo_handle_t duplicate = NULL;
+    assert(candis_expansion_ldo_acquire(CANDIS_EXPANSION_ALDO3, 1550, 5, &ldo) == ESP_ERR_INVALID_ARG);
+    assert(!ldo && !bus_users);
+
+    registers[0x94] = 28;
+    nack_next_read = true;
+    assert(candis_expansion_ldo_acquire(CANDIS_EXPANSION_ALDO3, 1500, 5, &ldo) == ESP_OK);
+    assert(ldo && enables == ALDO3 && registers[0x94] == 10);
+    assert(candis_expansion_ldo_acquire(CANDIS_EXPANSION_ALDO3, 1500, 5, &duplicate) == ESP_ERR_INVALID_STATE);
+    assert(!duplicate && bus_users == 1);
+    assert(candis_expansion_ldo_release(ldo) == ESP_OK && !enables && registers[0x94] == 28 && !bus_users);
+
+    enables = ALDO3;
+    assert(candis_expansion_ldo_acquire(CANDIS_EXPANSION_ALDO3, 1500, 5, &ldo) == ESP_ERR_INVALID_STATE);
+    assert(!ldo && !bus_users && enables == ALDO3 && registers[0x94] == 28);
+    assert(candis_expansion_ldo_acquire(CANDIS_EXPANSION_ALDO3, 3300, 5, &ldo) == ESP_OK);
+    assert(candis_expansion_ldo_release(ldo) == ESP_OK && enables == ALDO3 && registers[0x94] == 28 && !bus_users);
+
+    enables = 0;
+    fail_enable = true;
+    fail_rollback = true;
+    assert(candis_expansion_ldo_acquire(CANDIS_EXPANSION_ALDO3, 1500, 5, &ldo) == ESP_FAIL);
+    assert(ldo && bus_users == 1 && enables == ALDO3);
+    fail_rollback = false;
+    assert(candis_expansion_ldo_release(ldo) == ESP_OK && !enables && registers[0x94] == 28 && !bus_users);
     return 0;
 }
 """
@@ -114,6 +152,7 @@ class ExpansionPowerTest(unittest.TestCase):
                 'esp_err_t e = (call); if (e != ESP_OK) return e; } while (0)\n'
                 '#define ESP_RETURN_ON_FALSE(condition, error, tag, ...) do { (void)(tag); '
                 'if (!(condition)) return error; } while (0)\n'
+                '#define ESP_LOGE(tag, ...) do { (void)(tag); } while (0)\n'
             )
             (root / 'freertos').mkdir()
             (root / 'freertos/FreeRTOS.h').write_text('#define pdMS_TO_TICKS(ms) (ms)\n')
