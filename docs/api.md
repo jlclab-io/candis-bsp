@@ -94,7 +94,7 @@ PA 保持关闭。两路麦克风采用 30.5 dB PGA。应用可以在发送静�
 ## 扩展板
 
 从 [硬件与实测](hardware.md) 检查 UART0、DC1SW 和扩展板前置条件。`candis_baseboard_probe()`
-读取描述符并验证身份，应用据此调用 `candis_bb` 或 `candis_gamepad`。描述符内容不会配置引脚
+读取描述符并验证身份，应用据此调用 `candis_dock` 或 `candis_gamepad`。描述符内容不会配置引脚
 或电源。`candis_gamepad_read()` 返回数字电平，去抖、正交码解码和摇杆轴校准由应用实现。
 
 ## 摄像头

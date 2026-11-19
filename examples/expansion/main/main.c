@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-#include "bsp/candis_bb.h"
+#include "bsp/candis_dock.h"
 #include "bsp/candis_gamepad.h"
 #include "esp_log.h"
 
@@ -9,11 +9,11 @@ static esp_err_t inspect_expansion(const candis_baseboard_info_t *identity)
 {
     if (identity->kind == CANDIS_BASEBOARD_BB) {
         sdmmc_card_t *card;
-        esp_err_t err = candis_bb_mount(identity, "/sdcard", &card);
+        esp_err_t err = candis_dock_mount(identity, "/sdcard", &card);
         if (err != ESP_OK) {
             return err;
         }
-        ESP_LOGI(TAG, "BB card: %d kHz, width %u", card->real_freq_khz, 1U << card->log_bus_width);
+        ESP_LOGI(TAG, "Dock card: %d kHz, width %u", card->real_freq_khz, 1U << card->log_bus_width);
         return candis_storage_unmount();
     }
     esp_err_t err = candis_gamepad_open(identity);

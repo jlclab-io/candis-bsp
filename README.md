@@ -13,7 +13,7 @@ BSP 组件 `candis` 面向 Candis 硬件修订 1.2，可独立于扩展板运行
 | --- | --- |
 | [`candis`](components/candis) | 主 BSP，可独立使用 |
 | [`candis_ov5640`](components/candis_ov5640) | 综合测试板 OV5640 DVP 取流 |
-| [`candis_bb`](components/candis_bb) | BB 扩展板支持 |
+| [`candis_dock`](components/candis_dock) | Dock 扩展底板支持 |
 | [`candis_gamepad`](components/candis_gamepad) | Gamepad 扩展板支持 |
 
 ## 构建示例

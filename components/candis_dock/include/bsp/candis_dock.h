@@ -8,8 +8,8 @@
 extern "C" {
 #endif
 
-/** Mount the BB card using GPIO39 and an existing, powered DC1SW domain. */
-esp_err_t candis_bb_mount(const candis_baseboard_info_t *identity, const char *path, sdmmc_card_t **card);
+/** Mount the Dock card using GPIO39 and an existing, powered DC1SW domain. */
+esp_err_t candis_dock_mount(const candis_baseboard_info_t *identity, const char *path, sdmmc_card_t **card);
 
 #ifdef __cplusplus
 }
