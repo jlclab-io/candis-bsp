@@ -9,6 +9,10 @@ on:
         description: Publish candis to the configured Registry namespace
         type: boolean
         default: false
+      publish_camera:
+        description: Publish candis-camera to the configured Registry namespace
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -22,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - name: Check Registry configuration
-        if: github.event_name == 'workflow_dispatch' && inputs.publish
+        if: github.event_name == 'workflow_dispatch' && (inputs.publish || inputs.publish_camera)
         env:
           REGISTRY_NAMESPACE: ${{ vars.IDF_COMPONENT_NAMESPACE }}
           REGISTRY_TOKEN: ${{ secrets.IDF_COMPONENT_API_TOKEN }}
@@ -76,13 +80,43 @@ jobs:
           cp examples/display/main/{CMakeLists.txt,Kconfig.projbuild,main.c} "$consumer/main/"
           printf 'dependencies:\n  candis:\n    path: ../../candis-package/candis\n' > "$consumer/main/idf_component.yml"
           idf.py --preview -C "$consumer" build
+      - name: Build with the packed camera component
+        run: |
+          source "$RUNNER_TEMP/esp-idf/export.sh"
+          package_dir="$RUNNER_TEMP/candis-camera-package"
+          compote component pack --project-dir components/candis-camera --name candis-camera --dest-dir "$package_dir"
+          mkdir -p "$package_dir/candis-camera"
+          tar -xf "$package_dir"/candis-camera_*.tgz -C "$package_dir/candis-camera"
+          consumer="$RUNNER_TEMP/candis-camera-consumer"
+          mkdir -p "$consumer/main"
+          cp examples/camera/{CMakeLists.txt,sdkconfig.defaults} "$consumer/"
+          printf 'idf_component_register(SRCS "main.c" INCLUDE_DIRS ".")\n' > "$consumer/main/CMakeLists.txt"
+          cat > "$consumer/main/main.c" <<'C'
+          #include "bsp/candis_camera.h"
+          void app_main(void)
+          {
+              ESP_ERROR_CHECK(candis_camera_stop());
+          }
+          C
+          printf 'dependencies:\n  candis-camera:\n    path: ../../candis-camera-package/candis-camera\n' > "$consumer/main/idf_component.yml"
+          idf.py --preview -C "$consumer" build
+          python3 - "$consumer/dependencies.lock" <<'PY'
+          import sys
+          from pathlib import Path
+
+          import yaml
+
+          lock = yaml.safe_load(Path(sys.argv[1]).read_text())
+          assert lock["direct_dependencies"] == ["candis-camera"]
+          assert not any(name.split("/")[-1] == "candis" for name in lock["dependencies"])
+          PY
       - name: Check extension package manifests
         env:
           REGISTRY_NAMESPACE: ${{ vars.IDF_COMPONENT_NAMESPACE }}
         run: |
           source "$RUNNER_TEMP/esp-idf/export.sh"
           namespace="${REGISTRY_NAMESPACE:-candis_ci}"
-          for component in candis_dock candis_gamepad candis_ov5640; do
+          for component in candis_dock candis_gamepad; do
             stage="$RUNNER_TEMP/candis-extensions/$component"
             python3 tools/stage_registry_extension.py "$component" "$stage" --namespace "$namespace"
             compote component pack --project-dir "$stage" --name "$component" \
@@ -134,6 +168,13 @@ jobs:
           compote component upload --dry-run --project-dir components/candis --name candis \
             --commit-sha "$GITHUB_SHA" --repository-path components/candis \
             --dest-dir "$RUNNER_TEMP/candis-registry-check"
+      - name: Validate candis-camera on the ESP Component Registry
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          source "$RUNNER_TEMP/esp-idf/export.sh"
+          compote component upload --dry-run --project-dir components/candis-camera --name candis-camera \
+            --commit-sha "$GITHUB_SHA" --repository-path components/candis-camera \
+            --dest-dir "$RUNNER_TEMP/candis-camera-registry-check"
       - name: Publish Candis on the ESP Component Registry
         if: github.event_name == 'workflow_dispatch' && inputs.publish
         uses: espressif/upload-components-ci-action@2ce17d73e35473317c1419dbd4f007aacb593040 # v2.2.1
@@ -162,4 +203,36 @@ jobs:
           expected_sha = os.environ["GITHUB_SHA"]
           if manifest["version"] != sys.argv[2] or manifest["repository_info"]["commit_sha"] != expected_sha:
               sys.exit(f"The Registry archive does not match version {sys.argv[2]} at {expected_sha}")
+          PY
+      - name: Publish candis-camera on the ESP Component Registry
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_camera
+        uses: espressif/upload-components-ci-action@2ce17d73e35473317c1419dbd4f007aacb593040 # v2.2.1
+        with:
+          api_token: ${{ secrets.IDF_COMPONENT_API_TOKEN }}
+          namespace: ${{ vars.IDF_COMPONENT_NAMESPACE }}
+          components: candis-camera:components/candis-camera
+          repository_url: https://github.com/jlclab-io/candis-bsp.git
+      - name: Build with candis-camera downloaded from the Registry
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_camera
+        env:
+          REGISTRY_NAMESPACE: ${{ vars.IDF_COMPONENT_NAMESPACE }}
+        run: |
+          source "$RUNNER_TEMP/esp-idf/export.sh"
+          version="$(python3 -c 'import yaml; print(yaml.safe_load(open("components/candis-camera/idf_component.yml"))["version"])')"
+          consumer="$RUNNER_TEMP/camera-registry-consumer"
+          mkdir -p "$consumer"
+          cp examples/camera/{CMakeLists.txt,sdkconfig.defaults} "$consumer/"
+          cp -R "$RUNNER_TEMP/candis-camera-consumer/main" "$consumer/main"
+          printf 'dependencies:\n  %s/candis-camera: "==%s"\n' "$REGISTRY_NAMESPACE" "$version" > "$consumer/main/idf_component.yml"
+          idf.py --preview -C "$consumer" build
+          python3 - "$consumer/managed_components/${REGISTRY_NAMESPACE}__candis-camera/idf_component.yml" "$version" <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+
+          import yaml
+
+          manifest = yaml.safe_load(Path(sys.argv[1]).read_text())
+          if manifest["version"] != sys.argv[2] or manifest["repository_info"]["commit_sha"] != os.environ["GITHUB_SHA"]:
+              sys.exit("The Registry camera archive does not match this version and commit")
           PY

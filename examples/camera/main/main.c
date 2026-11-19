@@ -1,52 +1,16 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-#include <errno.h>
-#include <fcntl.h>
 #include <inttypes.h>
-#include <sys/ioctl.h>
-#include <sys/mman.h>
-#include <unistd.h>
 #include "bsp/candis.h"
-#include "bsp/candis_ov5640.h"
+#include "camera_fixture.h"
 #include "esp_check.h"
 #include "esp_heap_caps.h"
 #include "esp_timer.h"
-#include "esp_video_ioctl.h"
-#include "linux/videodev2.h"
 
-#define BUFFER_COUNT 2
 #define SAMPLE_INTERVAL_US 5000000
-static const char *TAG = "candis_ov5640_demo";
-static const enum v4l2_buf_type CAPTURE = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+static const char *TAG = "candis_camera_demo";
 
-typedef struct {
-    void *address;
-    size_t length;
-} buffer_t;
-
-static esp_err_t setup_capture(int fd, buffer_t buffers[BUFFER_COUNT], size_t frame_bytes)
+static esp_err_t check_preview_format(struct v4l2_pix_format *pix, size_t *frame_bytes)
 {
-    struct timeval timeout = {.tv_sec = 2};
-    ESP_RETURN_ON_FALSE(ioctl(fd, VIDIOC_S_DQBUF_TIMEOUT, &timeout) == 0, ESP_FAIL, TAG, "set dequeue timeout");
-    struct v4l2_requestbuffers request = {.type = CAPTURE, .memory = V4L2_MEMORY_MMAP, .count = BUFFER_COUNT};
-    ESP_RETURN_ON_FALSE(ioctl(fd, VIDIOC_REQBUFS, &request) == 0 && request.count == BUFFER_COUNT,
-                        ESP_ERR_NO_MEM, TAG, "allocate frame buffers");
-    for (unsigned i = 0; i < BUFFER_COUNT; ++i) {
-        struct v4l2_buffer buffer = {.type = CAPTURE, .memory = V4L2_MEMORY_MMAP, .index = i};
-        ESP_RETURN_ON_FALSE(ioctl(fd, VIDIOC_QUERYBUF, &buffer) == 0 && buffer.length >= frame_bytes,
-                            ESP_FAIL, TAG, "query frame buffer");
-        buffers[i].address = mmap(NULL, buffer.length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, buffer.m.offset);
-        ESP_RETURN_ON_FALSE(buffers[i].address != MAP_FAILED, ESP_ERR_NO_MEM, TAG, "map frame buffer");
-        buffers[i].length = buffer.length;
-        ESP_RETURN_ON_FALSE(ioctl(fd, VIDIOC_QBUF, &buffer) == 0, ESP_FAIL, TAG, "queue frame buffer");
-    }
-    return ESP_OK;
-}
-
-static esp_err_t read_format(int fd, struct v4l2_pix_format *pix, size_t *frame_bytes)
-{
-    struct v4l2_format format = {.type = CAPTURE};
-    ESP_RETURN_ON_FALSE(ioctl(fd, VIDIOC_G_FMT, &format) == 0, ESP_FAIL, TAG, "query capture format errno=%d", errno);
-    *pix = format.fmt.pix;
     ESP_RETURN_ON_FALSE(pix->width == 800 && pix->height == 600 &&
                         (pix->pixelformat == V4L2_PIX_FMT_RGB565 || pix->pixelformat == V4L2_PIX_FMT_RGB565X),
                         ESP_ERR_NOT_SUPPORTED, TAG, "expected 800x600 RGB565 DVP");
@@ -83,8 +47,7 @@ static void crop_and_scale(const struct v4l2_pix_format *pix, const uint8_t *src
     }
 }
 
-static esp_err_t preview(int fd, const buffer_t buffers[BUFFER_COUNT],
-                         const struct v4l2_pix_format *pix, size_t frame_bytes, uint16_t *pixels)
+static esp_err_t preview(const struct v4l2_pix_format *pix, size_t frame_bytes, uint16_t *pixels)
 {
     uint16_t columns[BSP_LCD_H_RES];
     const unsigned left = (pix->width - pix->height) / 2;
@@ -99,17 +62,15 @@ static esp_err_t preview(int fd, const buffer_t buffers[BUFFER_COUNT],
     unsigned captured = 0, shown = 0, invalid = 0, consecutive_invalid = 0;
     bool first_frame = true;
     for (;;) {
-        struct v4l2_buffer frame = {.type = CAPTURE, .memory = V4L2_MEMORY_MMAP};
-        ESP_RETURN_ON_FALSE(ioctl(fd, VIDIOC_DQBUF, &frame) == 0, ESP_ERR_TIMEOUT, TAG, "dequeue frame errno=%d", errno);
+        candis_camera_frame_t frame;
+        ESP_RETURN_ON_ERROR(candis_camera_frame_acquire(&frame), TAG, "capture preview frame");
         const int64_t dequeued = esp_timer_get_time();
-        ESP_RETURN_ON_FALSE(frame.index < BUFFER_COUNT, ESP_ERR_INVALID_RESPONSE, TAG, "invalid DVP buffer index");
         ++captured;
-        const bool valid = !(frame.flags & V4L2_BUF_FLAG_ERROR) && frame.bytesused >= frame_bytes &&
-                           frame.bytesused <= buffers[frame.index].length;
+        const bool valid = !(frame.flags & V4L2_BUF_FLAG_ERROR) && frame.size >= frame_bytes;
         if (valid) {
-            crop_and_scale(pix, buffers[frame.index].address, columns, pixels);
+            crop_and_scale(pix, frame.data, columns, pixels);
         }
-        ESP_RETURN_ON_FALSE(ioctl(fd, VIDIOC_QBUF, &frame) == 0, ESP_FAIL, TAG, "return DVP frame");
+        ESP_RETURN_ON_ERROR(candis_camera_frame_release(), TAG, "return preview frame");
         if (valid) {
             consecutive_invalid = 0;
             ESP_RETURN_ON_ERROR(candis_display_draw_rgb565(pixels), TAG, "send frame to AMOLED");
@@ -147,36 +108,11 @@ static esp_err_t preview(int fd, const buffer_t buffers[BUFFER_COUNT],
 
 static esp_err_t run_preview(uint16_t *pixels)
 {
-    int fd = open(candis_ov5640_device(), O_RDWR);
-    ESP_RETURN_ON_FALSE(fd >= 0, ESP_ERR_NOT_FOUND, TAG, "open DVP device");
-    buffer_t buffers[BUFFER_COUNT] = {0};
     struct v4l2_pix_format format;
+    ESP_RETURN_ON_ERROR(candis_camera_stream_start(NULL, &format), TAG, "start preview stream");
     size_t frame_bytes;
-    esp_err_t err = read_format(fd, &format, &frame_bytes);
-    if (err == ESP_OK) {
-        err = setup_capture(fd, buffers, frame_bytes);
-    }
-    if (err == ESP_OK) {
-        enum v4l2_buf_type type = CAPTURE;
-        if (ioctl(fd, VIDIOC_STREAMON, &type) == 0) {
-            err = preview(fd, buffers, &format, frame_bytes, pixels);
-            if (ioctl(fd, VIDIOC_STREAMOFF, &type) != 0) {
-                ESP_LOGE(TAG, "stop DVP stream errno=%d", errno);
-            }
-        } else {
-            ESP_LOGE(TAG, "start DVP stream errno=%d", errno);
-            err = ESP_FAIL;
-        }
-    }
-    for (unsigned i = 0; i < BUFFER_COUNT; ++i) {
-        if (buffers[i].length) {
-            munmap(buffers[i].address, buffers[i].length);
-        }
-    }
-    if (close(fd) != 0) {
-        ESP_LOGE(TAG, "close DVP device errno=%d", errno);
-    }
-    return err;
+    ESP_RETURN_ON_ERROR(check_preview_format(&format, &frame_bytes), TAG, "configure preview");
+    return preview(&format, frame_bytes, pixels);
 }
 
 void app_main(void)
@@ -196,11 +132,12 @@ void app_main(void)
 #endif
     esp_err_t err = candis_display_start_raw(&config);
     if (err == ESP_OK) {
-        err = candis_ov5640_start();
+        const candis_camera_config_t camera = camera_fixture_config();
+        err = candis_camera_init(&camera);
         if (err == ESP_OK) {
             err = run_preview(pixels);
         }
-        ESP_ERROR_CHECK_WITHOUT_ABORT(candis_ov5640_stop());
+        ESP_ERROR_CHECK_WITHOUT_ABORT(candis_camera_stop());
     }
     ESP_ERROR_CHECK_WITHOUT_ABORT(candis_display_stop());
     heap_caps_free(pixels);

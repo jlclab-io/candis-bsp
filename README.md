@@ -12,7 +12,7 @@ BSP 组件 `candis` 面向 Candis 硬件修订 1.2，可独立于扩展板运行
 | 组件 | 用途 |
 | --- | --- |
 | [`candis`](components/candis) | 主 BSP，可独立使用 |
-| [`candis_ov5640`](components/candis_ov5640) | 综合测试板 OV5640 DVP 取流 |
+| [`candis-camera`](components/candis-camera) | 通用 OV5640 DVP 摄像头组件，支持硬件配置、模式选择、拍照和连续取流 |
 | [`candis_dock`](components/candis_dock) | Dock 扩展底板支持 |
 | [`candis_gamepad`](components/candis_gamepad) | Gamepad 扩展板支持 |
 
@@ -134,14 +134,18 @@ esp_err_t app_display_start(void)
 ## 维护与发布
 
 GitHub Actions 构建六个独立示例、运行主机测试，并从 `compote` 生成的
-`candis` 包构建独立应用。Registry 工作流通过 `IDF_COMPONENT_NAMESPACE`
+`candis` 和 `candis-camera` 包分别构建独立应用。Registry 工作流通过 `IDF_COMPONENT_NAMESPACE`
 仓库变量指定实际命名空间。正式上传使用 `IDF_COMPONENT_API_TOKEN` 仓库密钥。
 在 `main` 手动运行 **ESP-IDF build**，默认向 Registry 提交校验且跳过版本创建。
 预检通过后可启用 `publish` 发布清单中的版本。发布包附带显示示例，引用同一
 Registry 命名空间下的确切版本。工作流从 Registry 下载并构建该示例，随后核对
 组件清单记录的 Git 提交。命名空间尚未配置时，预检中的示例使用固定的 Git 修订。
 
-扩展组件在仓库中通过本地路径联调。发布时，用
+摄像头组件使用独立清单，可单独预检和发布。手动工作流的 `publish_camera`
+选项上传 `candis-camera`，随后从 Registry 下载到全新应用并验证构建和来源提交。
+综合测试板预设位于摄像头示例，安装方法见 [摄像头组件](components/candis-camera)。
+
+Dock 和 Gamepad 在仓库中通过本地路径联调。发布时，用
 `python3 tools/stage_registry_extension.py <组件名> <新暂存目录> --namespace <已获批命名空间>`
-生成清单。暂存包依赖主 BSP 清单中的确切版本。CI 检查三种扩展能否独立打包。
-待该主 BSP 版本发布后，再对扩展做 Registry 上传预检、全新工程安装及对应硬件验证。
+生成清单。CI 检查两个扩展能否单独打包，暂存包依赖主 BSP 清单中的确切版本。
+对应主 BSP 版本发布后，可对这两个扩展做上传预检、全新工程安装及对应硬件验证。

@@ -1,6 +1,0 @@
-config CANDIS_OV5640_FIXTURE
-    bool "Candis OV5640 validation fixture preset"
-    default y
-    help
-        Include the Candis validation fixture pin map and shared power adapter.
-        Disable for applications that supply their own camera configuration.

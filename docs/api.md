@@ -99,13 +99,16 @@ PA 保持关闭。两路麦克风采用 30.5 dB PGA。应用可以在发送静�
 
 ## 摄像头
 
-综合测试板 OV5640 使用可选组件 `candis_ov5640`。该组件负责传感器引脚、XCLK 和上电顺序，
-通过主 BSP 的扩展 LDO 租约和共享主 I²C 管理资源。应用初始化 `candis_ov5640_start()` 后，
-通过 `candis_ov5640_device()` 取得 V4L2 节点。停止流、解除帧缓冲映射并关闭节点后，调用
-`candis_ov5640_stop()` 释放 DVP、XCLK 和已持有的电源。示例的 800×600 RGB565 取流使用
-两个 MMAP 缓冲。应用将中心 600×600 区域缩放至 480×480，再将帧送到面板。
-摄像头缓冲在面板写入前归还。DQBUF 到 DMA 完成计时覆盖缩放、TE 等待和传输。
+`candis-camera` 提供配置式 DVP 摄像头接口，当前支持 OV5640。用 `candis_camera_get_mode()`
+枚举构建时启用的模式。OV5640 的工作模式通过 Kconfig 选择，
+`candis_camera_stream_start()` 可校验已启用模式，并配置输出格式和超时。
+单帧拍照用 `candis_camera_capture_frame()` 复制到应用缓冲。连续取流时用
+`candis_camera_frame_acquire()` 和 `candis_camera_frame_release()` 借还 DMA 帧。
+`candis_camera_stream_stop()` 释放取流资源，`candis_camera_stop()` 进一步释放
+DVP、XCLK 和电源。需要原生 V4L2 控件时可通过 `candis_camera_device()` 获取节点。
 
-自定义硬件使用 `candis_ov5640_start_with_config()`，传入 DVP 引脚、时钟、SCCB
+自定义硬件使用 `candis_camera_init()`，传入 DVP 引脚、时钟、SCCB
 及电源回调。驱动检查引脚能力和重复分配。使用外借总线时，应用需协调该总线上已有资源。
-关闭 `CONFIG_CANDIS_OV5640_FIXTURE` 后可独立构建摄像头组件。
+ESP Video 探测编译时启用的 DVP 传感器。摄像头组件可独立构建。
+综合测试板预设见仓库的摄像头示例。AMOLED 预览示例把
+800×600 RGB565 帧裁切缩放至 480×480，在写入面板前归还摄像头缓冲。

@@ -10,7 +10,7 @@ import shutil
 import yaml
 
 
-EXTENSIONS = ("candis_dock", "candis_gamepad", "candis_ov5640")
+EXTENSIONS = ("candis_dock", "candis_gamepad")
 COMPONENTS = Path(__file__).resolve().parents[1] / "components"
 
 

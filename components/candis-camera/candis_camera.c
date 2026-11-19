@@ -3,14 +3,14 @@
 #include <fcntl.h>
 #include <string.h>
 #include <unistd.h>
-#include "bsp/candis_ov5640.h"
+#include "bsp/candis_camera.h"
 #include "esp_check.h"
 #include "esp_video_device.h"
 #include "esp_video_init.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-static const char *TAG = "candis_ov5640";
+static const char *TAG = "candis_camera";
 static bool s_clock_timer;
 static bool s_clock_channel;
 static bool s_reset;
@@ -19,7 +19,7 @@ static bool s_video;
 static bool s_ready;
 static bool s_configured;
 static bool s_resources;
-static candis_ov5640_config_t s_config;
+static candis_camera_config_t s_config;
 
 static bool add_pin(uint64_t *used, gpio_num_t pin, bool output)
 {
@@ -35,7 +35,7 @@ static bool add_pin(uint64_t *used, gpio_num_t pin, bool output)
     return true;
 }
 
-static bool valid_config(const candis_ov5640_config_t *config)
+static bool valid_config(const candis_camera_config_t *config)
 {
     uint64_t used = 0;
     for (unsigned i = 0; i < sizeof(config->data) / sizeof(config->data[0]); ++i) {
@@ -161,7 +161,7 @@ static esp_err_t release_control_pin(gpio_num_t pin)
     return gpio_pullup_dis(pin);
 }
 
-esp_err_t candis_ov5640_start_with_config(const candis_ov5640_config_t *config)
+esp_err_t candis_camera_init(const candis_camera_config_t *config)
 {
     if (s_configured) {
         return ESP_ERR_INVALID_STATE;
@@ -173,18 +173,19 @@ esp_err_t candis_ov5640_start_with_config(const candis_ov5640_config_t *config)
     s_configured = true;
     esp_err_t err = start_camera();
     if (err != ESP_OK) {
-        ESP_ERROR_CHECK_WITHOUT_ABORT(candis_ov5640_stop());
+        ESP_ERROR_CHECK_WITHOUT_ABORT(candis_camera_stop());
     }
     return err;
 }
 
-const char *candis_ov5640_device(void)
+const char *candis_camera_device(void)
 {
     return s_ready ? ESP_VIDEO_DVP_DEVICE_NAME : NULL;
 }
 
-esp_err_t candis_ov5640_stop(void)
+esp_err_t candis_camera_stop(void)
 {
+    ESP_RETURN_ON_ERROR(candis_camera_stream_stop(), TAG, "release DVP stream");
     s_ready = false;
     if (s_video) {
         ESP_RETURN_ON_ERROR(esp_video_deinit_with_flags(ESP_VIDEO_INIT_FLAGS_DVP), TAG, "release DVP video");

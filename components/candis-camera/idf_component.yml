@@ -1,0 +1,17 @@
+version: "0.1.0"
+description: Configurable DVP camera capture for ESP32-S31
+license: Apache-2.0
+url: https://github.com/jlclab-io/candis-bsp/tree/main/components/candis-camera
+repository: https://github.com/jlclab-io/candis-bsp.git
+repository_info:
+  path: components/candis-camera
+targets:
+  - esp32s31
+dependencies:
+  idf: ">=6.2,<6.3"
+  espressif/esp_video:
+    version: "2.5.0"
+    public: true
+  espressif/esp_cam_sensor:
+    version: "2.6.0"
+    public: true

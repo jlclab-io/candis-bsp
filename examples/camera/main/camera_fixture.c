@@ -1,11 +1,11 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /* Candis hardware revision 1.2 with the validation fixture. */
 #include "bsp/candis.h"
-#include "bsp/candis_ov5640.h"
+#include "camera_fixture.h"
 #include "bsp/candis_power.h"
 #include "esp_check.h"
 
-static const char *TAG = "candis_ov5640";
+static const char *TAG = "candis_camera";
 static i2c_master_bus_handle_t s_bus;
 static candis_expansion_ldo_handle_t s_supplies[3];
 
@@ -37,9 +37,9 @@ static esp_err_t release_fixture(void *context)
     return ESP_OK;
 }
 
-candis_ov5640_config_t candis_ov5640_fixture_config(void)
+candis_camera_config_t camera_fixture_config(void)
 {
-    return (candis_ov5640_config_t) {
+    return (candis_camera_config_t) {
         .data = {GPIO_NUM_46, GPIO_NUM_47, GPIO_NUM_48, GPIO_NUM_49,
                  GPIO_NUM_50, GPIO_NUM_51, GPIO_NUM_52, GPIO_NUM_53},
         .pclk = GPIO_NUM_54,
@@ -58,10 +58,4 @@ candis_ov5640_config_t candis_ov5640_fixture_config(void)
         .acquire = acquire_fixture,
         .release = release_fixture,
     };
-}
-
-esp_err_t candis_ov5640_start(void)
-{
-    const candis_ov5640_config_t config = candis_ov5640_fixture_config();
-    return candis_ov5640_start_with_config(&config);
 }
