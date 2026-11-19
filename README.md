@@ -30,12 +30,14 @@ USB Serial/JTAG 与 Candis USB OTG 是两个接口，烧录时应先核对串口
 
 显示复测可在干净的示例配置中叠加 `sdkconfig.bench`（把 `SDKCONFIG_DEFAULTS`
 设为 `sdkconfig.defaults;sdkconfig.bench`）。诊断示例的 `sdkconfig.features`
-打开音频、TF 和 OTG CDC。综合测试板 TF 需另外选择 GPIO35 卡检测并按连接负载
+打开音频、TF 和 OTG CDC 下载支持。综合测试板 TF 需另外选择 GPIO35 卡检测并按连接负载
 设置 DC1SW。扩展板示例执行显式探测，运行前须满足 GPIO58/59 与供电前置条件。
 
 RTC 示例通过综合测试板的 USB Serial/JTAG 提供命令行。输入 `READ` 读取 UTC 日历，
 `SET <UTC epoch>` 设置有效日历，`RECOVER <UTC epoch>` 允许恢复掉电后无效的日历。
 在主机执行 `date -u +%s` 获取当前 epoch。示例启动时只读日历。
+
+USB OTG 的应用区更新和综合测试板 USB Serial/JTAG 的恢复方式见 [USB 调试](docs/usb.md)。
 
 ## 在独立应用使用
 

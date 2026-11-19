@@ -19,6 +19,11 @@ config CANDIS_DIAGNOSTICS_OTG
     select TINYUSB_CDC_ENABLED
     default n
 
+config CANDIS_DIAGNOSTICS_OTG_DOWNLOAD
+    bool "Allow the Candis OTG CDC to hand over to the ROM downloader"
+    depends on CANDIS_DIAGNOSTICS_OTG
+    default n
+
 config CANDIS_DIAGNOSTICS_AUDIO
     bool "Exercise the codec and its two PCM channels"
     depends on CANDIS_AUDIO
