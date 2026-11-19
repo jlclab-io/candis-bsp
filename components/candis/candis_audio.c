@@ -23,6 +23,8 @@
 #define ES8389_DAC_LEFT 0x46
 #define ES8389_DAC_RIGHT 0x47
 #define ES8389_DAC_MINUS_6DB 0xb3
+#define DAC_MAX_GAIN_DB (-6.0f)
+#define MAX_VOLUME 100
 #define PLAYBACK_GAIN 4.0f
 #define PLAYBACK_PEAK 25000.0f
 #define PLAYBACK_RELEASE_FRAMES (CANDIS_AUDIO_RATE / 10)
@@ -42,6 +44,21 @@ static struct {
     float playback_gain;
     atomic_bool output_enabled;
 } s_audio;
+
+static esp_err_t set_codec_volume(unsigned volume)
+{
+    ESP_RETURN_ON_FALSE(esp_codec_dev_set_out_vol(s_audio.pcm, volume) == ESP_CODEC_DEV_OK,
+                        ESP_FAIL, TAG, "set ES8389 DAC volume");
+    if (volume == MAX_VOLUME) {
+        int left = 0, right = 0;
+        ESP_RETURN_ON_FALSE(esp_codec_dev_read_reg(s_audio.pcm, ES8389_DAC_LEFT, &left) == ESP_CODEC_DEV_OK &&
+                            esp_codec_dev_read_reg(s_audio.pcm, ES8389_DAC_RIGHT, &right) == ESP_CODEC_DEV_OK &&
+                            left == ES8389_DAC_MINUS_6DB && right == ES8389_DAC_MINUS_6DB,
+                            ESP_ERR_INVALID_RESPONSE, TAG, "ES8389 maximum DAC readback L=0x%02x R=0x%02x", left, right);
+        ESP_LOGD(TAG, "DAC verified at -6 dB on both channels");
+    }
+    return ESP_OK;
+}
 
 static esp_err_t open_channels(void)
 {
@@ -92,21 +109,24 @@ static esp_err_t open_codec(void)
     };
     ESP_RETURN_ON_FALSE(esp_codec_dev_open(s_audio.pcm, &format) == ESP_CODEC_DEV_OK,
                         ESP_FAIL, TAG, "start ES8389");
-    esp_codec_dev_vol_map_t levels[101] = {{.vol = 0, .db_value = -96.0f}};
-    for (unsigned i = 1; i <= 100; ++i) {
-        levels[i] = (esp_codec_dev_vol_map_t){.vol = i, .db_value = -6.0f + 20.0f * log10f(i / 100.0f)};
+    /* Match the Candis bring-up curve tested with dual 8-ohm speakers. */
+    esp_codec_dev_vol_map_t levels[MAX_VOLUME + 1] = {{.vol = 0, .db_value = -96.0f}};
+    for (unsigned i = 1; i <= MAX_VOLUME; ++i) {
+        levels[i] = (esp_codec_dev_vol_map_t){
+            .vol = i, .db_value = DAC_MAX_GAIN_DB + 20.0f * log10f((float)i / MAX_VOLUME),
+        };
     }
-    esp_codec_dev_vol_curve_t curve = {.vol_map = levels, .count = 101};
+    esp_codec_dev_vol_curve_t curve = {.vol_map = levels, .count = MAX_VOLUME + 1};
     ESP_RETURN_ON_FALSE(esp_codec_dev_set_vol_curve(s_audio.pcm, &curve) == ESP_CODEC_DEV_OK &&
-                        esp_codec_dev_set_out_vol(s_audio.pcm, 50) == ESP_CODEC_DEV_OK &&
                         esp_codec_dev_set_in_gain(s_audio.pcm, MIC_GAIN_REQUEST_DB) == ESP_CODEC_DEV_OK,
                         ESP_FAIL, TAG, "configure ES8389 gains");
+    ESP_RETURN_ON_ERROR(set_codec_volume(MAX_VOLUME), TAG, "configure default playback volume");
     int left = 0, right = 0;
     ESP_RETURN_ON_FALSE(esp_codec_dev_read_reg(s_audio.pcm, ES8389_PGA_LEFT, &left) == ESP_CODEC_DEV_OK &&
                         esp_codec_dev_read_reg(s_audio.pcm, ES8389_PGA_RIGHT, &right) == ESP_CODEC_DEV_OK &&
                         (left & 0x0f) == ES8389_PGA_30_5DB && (right & 0x0f) == ES8389_PGA_30_5DB,
                         ESP_ERR_INVALID_RESPONSE, TAG, "verify ES8389 30.5 dB PGA");
-    s_audio.volume = 50;
+    s_audio.volume = MAX_VOLUME;
     s_audio.playback_gain = PLAYBACK_GAIN;
     ESP_LOGD(TAG, "PGA verified at 30.5 dB on both channels");
     return ESP_OK;
@@ -194,7 +214,7 @@ esp_err_t candis_audio_open(bool manage_power)
 
 esp_err_t candis_audio_set_volume(unsigned volume)
 {
-    if (volume > 100) {
+    if (volume > MAX_VOLUME) {
         return ESP_ERR_INVALID_ARG;
     }
     if (!s_audio.open) {
@@ -204,23 +224,15 @@ esp_err_t candis_audio_set_volume(unsigned volume)
         atomic_store(&s_audio.output_enabled, false);
         ESP_RETURN_ON_ERROR(gpio_set_level(PA_ENABLE, 0), TAG, "mute power amplifier");
     }
-    if (esp_codec_dev_set_out_vol(s_audio.pcm, volume) != ESP_CODEC_DEV_OK) {
-        return ESP_FAIL;
+    esp_err_t result = set_codec_volume(volume);
+    if (result == ESP_ERR_INVALID_RESPONSE) {
+        ESP_ERROR_CHECK_WITHOUT_ABORT(candis_audio_set_output(false));
+        s_audio.volume = 0;
     }
-    if (volume == 100) {
-        int left = 0, right = 0;
-        if (esp_codec_dev_read_reg(s_audio.pcm, ES8389_DAC_LEFT, &left) != ESP_CODEC_DEV_OK ||
-            esp_codec_dev_read_reg(s_audio.pcm, ES8389_DAC_RIGHT, &right) != ESP_CODEC_DEV_OK ||
-            left != ES8389_DAC_MINUS_6DB || right != ES8389_DAC_MINUS_6DB) {
-            ESP_ERROR_CHECK_WITHOUT_ABORT(candis_audio_set_output(false));
-            s_audio.volume = 0;
-            ESP_LOGE(TAG, "ES8389 maximum DAC readback L=0x%02x R=0x%02x", left, right);
-            return ESP_ERR_INVALID_RESPONSE;
-        }
-        ESP_LOGD(TAG, "DAC verified at -6 dB on both channels");
+    if (result == ESP_OK) {
+        s_audio.volume = volume;
     }
-    s_audio.volume = volume;
-    return ESP_OK;
+    return result;
 }
 
 esp_err_t candis_audio_set_output(bool on)

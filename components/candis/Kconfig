@@ -5,4 +5,8 @@ config CANDIS_AUDIO
     default n
     select CODEC_ES8389_SUPPORT
 
+config CANDIS_IMU
+    bool "Build the Candis expansion BMI270 interface"
+    default n
+
 endmenu

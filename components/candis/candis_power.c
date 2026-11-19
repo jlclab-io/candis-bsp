@@ -19,6 +19,9 @@
 #define TG28_TIMEOUT_MS 100
 
 static const char *TAG = "candis_power";
+static candis_power_t s_expansion = {.rail = CANDIS_RAIL_EXPANSION};
+static unsigned s_expansion_users;
+static bool s_expansion_cleanup;
 static const struct {
     uint8_t reg;
     uint8_t code;
@@ -52,7 +55,7 @@ static esp_err_t open_pmu(candis_power_t *lease)
     return i2c_master_bus_add_device(lease->bus, &config, &lease->pmu);
 }
 
-esp_err_t candis_power_acquire(candis_power_t *lease, bool manage, unsigned settle_ms)
+static esp_err_t acquire_rail(candis_power_t *lease, bool manage, unsigned settle_ms)
 {
     /* The caller holds the board control lock for all PMU register updates. */
     ESP_RETURN_ON_ERROR(open_pmu(lease), TAG, "open TG28 device");
@@ -91,7 +94,7 @@ esp_err_t candis_power_acquire(candis_power_t *lease, bool manage, unsigned sett
            ? ESP_OK : ESP_ERR_INVALID_RESPONSE;
 }
 
-esp_err_t candis_power_release(candis_power_t *lease)
+static esp_err_t release_rail(candis_power_t *lease)
 {
     if (lease->owned) {
         if (lease->rail == CANDIS_RAIL_EXPANSION) {
@@ -115,6 +118,46 @@ esp_err_t candis_power_release(candis_power_t *lease)
         ESP_RETURN_ON_ERROR(candis_i2c_release_locked(lease->bus), TAG, "release main I2C");
         lease->bus = NULL;
     }
+    return ESP_OK;
+}
+
+esp_err_t candis_power_acquire(candis_power_t *lease, bool manage, unsigned settle_ms)
+{
+    if (lease->rail != CANDIS_RAIL_EXPANSION) {
+        return acquire_rail(lease, manage, settle_ms);
+    }
+    if (lease->bus || s_expansion_cleanup) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    esp_err_t result = ESP_OK;
+    if (s_expansion_users == 0) {
+        result = acquire_rail(&s_expansion, manage, settle_ms);
+        if (!s_expansion.bus) {
+            return result;
+        }
+        /* The first client also holds any partially acquired resources. */
+        s_expansion_cleanup = result != ESP_OK;
+    }
+    ++s_expansion_users;
+    lease->bus = s_expansion.bus;
+    return result;
+}
+
+esp_err_t candis_power_release(candis_power_t *lease)
+{
+    if (lease->rail != CANDIS_RAIL_EXPANSION) {
+        return release_rail(lease);
+    }
+    if (!lease->bus) {
+        return ESP_OK;
+    }
+    if (s_expansion_users == 1) {
+        s_expansion_cleanup = true;
+        ESP_RETURN_ON_ERROR(release_rail(&s_expansion), TAG, "release last DC1SW lease");
+        s_expansion_cleanup = false;
+    }
+    --s_expansion_users;
+    lease->bus = NULL;
     return ESP_OK;
 }
 

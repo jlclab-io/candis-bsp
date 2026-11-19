@@ -64,8 +64,6 @@ static esp_err_t transfer_pcm(void)
     ESP_RETURN_ON_ERROR(candis_audio_write(silence, FRAMES, &frames, 100), TAG, "write silent PCM");
     ESP_RETURN_ON_FALSE(frames == FRAMES, ESP_ERR_INVALID_SIZE, TAG, "short PCM write");
     ESP_LOGI(TAG, "PCM RX=%u frames, peak L=%d R=%d, silent TX=%u frames", captured, peak[0], peak[1], (unsigned)frames);
-    ESP_RETURN_ON_ERROR(candis_audio_set_volume(100), TAG, "verify maximum output setting");
-    ESP_LOGI(TAG, "ES8389 PGA 30.5 dB and DAC 0xB3/0xB3 verified");
     return ESP_OK;
 }
 
@@ -73,6 +71,7 @@ esp_err_t candis_diagnostics_audio(void)
 {
     for (unsigned cycle = 1; cycle <= 2; ++cycle) {
         ESP_RETURN_ON_ERROR(candis_audio_open(true), TAG, "open audio");
+        ESP_LOGI(TAG, "ES8389 default gain verified: PGA 30.5 dB, DAC 0xB3/0xB3, amplifier off");
         esp_err_t err = transfer_pcm();
 #ifdef CONFIG_CANDIS_DIAGNOSTICS_PLAYBACK
         if (err == ESP_OK && cycle == 1) {

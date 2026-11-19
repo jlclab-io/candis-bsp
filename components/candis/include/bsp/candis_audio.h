@@ -14,7 +14,7 @@ extern "C" {
 #define CANDIS_AUDIO_CHANNELS 2
 #define CANDIS_AUDIO_PLAYBACK_BLOCK_FRAMES 240
 
-/** Open duplex stereo PCM, 48 kHz and 16 bits, at 50% volume with the amplifier off. */
+/** Open duplex stereo PCM, 48 kHz and 16 bits, at 100% volume (-6 dB DAC), with the amplifier off. */
 esp_err_t candis_audio_open(bool manage_power);
 /** Set playback level, 0–100, with a -6 dB codec ceiling. Zero disables the amplifier. */
 esp_err_t candis_audio_set_volume(unsigned volume);

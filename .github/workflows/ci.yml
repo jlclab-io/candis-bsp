@@ -35,6 +35,7 @@ jobs:
           idf.py --preview -C examples/expansion build
           idf.py --preview -C examples/camera build
           idf.py --preview -C examples/rtc build
+          idf.py --preview -C examples/motion build
       - name: Run host tests
         run: |
           source "$RUNNER_TEMP/esp-idf/export.sh"

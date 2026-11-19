@@ -11,6 +11,9 @@ set(candis_private_requires esp_driver_gpio esp_driver_spi esp_driver_i2s esp_lc
 if(CONFIG_CANDIS_AUDIO)
     list(APPEND candis_sources "candis_audio.c")
 endif()
+if(CONFIG_CANDIS_IMU)
+    list(APPEND candis_sources "candis_imu.c")
+endif()
 
 idf_component_register(SRCS ${candis_sources}
                        INCLUDE_DIRS "include"

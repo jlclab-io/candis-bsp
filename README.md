@@ -6,7 +6,7 @@ BSP 组件 `candis` 面向 Candis 硬件修订 1.2，可独立于扩展板运行
 
 本仓库处于开发预览阶段。已集成共享主 I²C、ST7801N QSPI 显示、TE 同步、亮度、CST9220
 双触点读取、RX8130CE 日历读取和 TF 卡挂载。音频为可选功能。BB 和 Gamepad 作为独立组件，
-综合测试板 OV5640 提供可选 DVP 组件。实板使用范围见硬件文档。IMU 和整机低功耗仍需集成验证。
+综合测试板 OV5640 提供可选 DVP 组件，BMI270 六轴采样可按需启用。实板使用范围见硬件文档。整机低功耗仍需集成验证。
 参见 [API 参考](docs/api.md) 和 [硬件与实测](docs/hardware.md)。
 
 ## 构建示例
@@ -21,6 +21,7 @@ idf.py --preview -C examples/diagnostics build
 idf.py --preview -C examples/expansion build
 idf.py --preview -C examples/camera build
 idf.py --preview -C examples/rtc build
+idf.py --preview -C examples/motion build
 ```
 
 示例开启 PSRAM，默认采用 50 MHz QSPI 和综合测试板 USB Serial/JTAG
@@ -36,6 +37,10 @@ USB Serial/JTAG 与 Candis USB OTG 是两个接口，烧录时应先核对串口
 RTC 示例通过综合测试板的 USB Serial/JTAG 提供命令行。输入 `READ` 读取 UTC 日历，
 `SET <UTC epoch>` 设置有效日历，`RECOVER <UTC epoch>` 允许恢复掉电后无效的日历。
 在主机执行 `date -u +%s` 获取当前 epoch。示例启动时只读日历。
+
+运动示例默认使用已经上电的扩展域。确认综合测试板的 DC1SW 负载后，可在 `menuconfig`
+启用 `CANDIS_MOTION_MANAGE_POWER`。`CANDIS_MOTION_TEST_STORAGE` 额外验证连接的 TF 卡
+与 IMU 并行时的供电释放顺序。
 
 USB OTG 的应用区更新和综合测试板 USB Serial/JTAG 的恢复方式见 [USB 调试](docs/usb.md)。
 

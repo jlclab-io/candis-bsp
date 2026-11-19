@@ -1,0 +1,11 @@
+menu "Candis motion example"
+
+config CANDIS_MOTION_MANAGE_POWER
+    bool "Power the expansion domain for a verified fixture"
+    default n
+
+config CANDIS_MOTION_TEST_STORAGE
+    bool "Run shared-power checks with the fixture's TF card"
+    default n
+
+endmenu

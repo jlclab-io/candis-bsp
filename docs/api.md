@@ -7,6 +7,7 @@
 | 电源 | `bsp/candis_power.h` | `candis_power_read()` 读取开关状态 |
 | RTC | `bsp/candis_rtc.h` | `candis_rtc_get_time()` 按需读取 |
 | TF | `bsp/candis_storage.h` | `candis_storage_mount()` / `candis_storage_unmount()` |
+| BMI270 | `bsp/candis_imu.h` | `candis_imu_start()` / `candis_imu_stop()` |
 | 音频 | `bsp/candis_audio.h` | `candis_audio_open()` / `candis_audio_close()` |
 | 扩展板识别 | `bsp/candis_baseboard.h` | `candis_baseboard_probe()` 按需只读 |
 
@@ -54,11 +55,23 @@ ALDO1 电源条件和台架频率见 [硬件与实测](hardware.md)。
 DC1SW 同时给多个扩展设备供电。挂载时优先使用既有的电源状态。只有确认当前应用负责
 整个 DC1SW 域时才可传入 `manage_power=true`。
 
+## IMU
+
+启用 `CONFIG_CANDIS_IMU` 后，可调用 `candis_imu_start()`、`candis_imu_read()` 和
+`candis_imu_stop()`。轮询配置为 100 Hz、±4 g 和 ±1000 dps，输出使用芯片坐标系。
+样本中的时间戳为本次读取完成后的 ESP 单调时钟。加速度和陀螺仪由驱动分别读取。
+
+在扩展域已经上电时传入 `false`。台架确认整条 DC1SW 域负载后，应用可传入 `true`
+管理这条电源。如果 IMU 启动或停止时报出清理失败，可再次调用 `candis_imu_stop()` 释放
+剩余资源。IMU、TF 与底板识别使用同一条 DC1SW 供电。BSP 每次为外设分配一个引用，最后
+一个引用释放时才恢复 BSP 自己开启的电源。外部开启的 DC1SW 保持上电。
+
 ## 音频
 
 启用 `CONFIG_CANDIS_AUDIO` 后可通过 ES8389 和 I²S 双向传输 48 kHz、16 位交织立体声 PCM。
-初始音量为 50%，PA 保持关闭。两路麦克风采用实测通过的 30.5 dB PGA。发送静音后设置音量，
-再按需开启 PA。100% 时校验两路 DAC 寄存器均为 0xB3（−6 dB）。音量设为 0 时关闭 PA。
+初始音量采用综合测试板实测通过的 100%，启动时校验两路 DAC 寄存器为 0xB3（−6 dB），
+PA 保持关闭。两路麦克风采用 30.5 dB PGA。应用可以在发送静音后调低音量，再按需开启 PA。
+音量设为 0 时关闭 PA。
 使用 `candis_audio_playback_write()` 输入最多 240 帧，可按块采用最高 4 倍增益和 25,000
 峰值限制。录音回放建议由应用在片段边界做淡入淡出。
 读写分别返回实际传输帧数和状态。停止流后关闭驱动以释放 I²S 和电源。
