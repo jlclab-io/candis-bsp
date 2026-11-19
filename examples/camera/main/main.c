@@ -6,7 +6,7 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <unistd.h>
-#include "bsp/candis_camera.h"
+#include "bsp/candis_ov5640.h"
 #include "esp_check.h"
 #include "esp_timer.h"
 #include "esp_video_ioctl.h"
@@ -14,7 +14,7 @@
 
 #define FRAME_COUNT 32
 #define BUFFER_COUNT 2
-static const char *TAG = "candis_camera_demo";
+static const char *TAG = "candis_ov5640_demo";
 static const enum v4l2_buf_type CAPTURE = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 
 typedef struct {
@@ -71,7 +71,7 @@ static esp_err_t read_frames(int fd, const buffer_t buffers[BUFFER_COUNT], size_
 
 static esp_err_t capture(void)
 {
-    int fd = open(candis_camera_device(), O_RDWR);
+    int fd = open(candis_ov5640_device(), O_RDWR);
     ESP_RETURN_ON_FALSE(fd >= 0, ESP_ERR_NOT_FOUND, TAG, "open DVP device");
     esp_err_t err = ESP_FAIL;
     bool streaming = false;
@@ -116,13 +116,13 @@ static esp_err_t capture(void)
 void app_main(void)
 {
     for (unsigned cycle = 1; cycle <= 2; ++cycle) {
-        esp_err_t err = candis_camera_start();
+        esp_err_t err = candis_ov5640_start();
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "Camera start: %s", esp_err_to_name(err));
             return;
         }
         err = capture();
-        esp_err_t stopped = candis_camera_stop();
+        esp_err_t stopped = candis_ov5640_stop();
         ESP_LOGI(TAG, "cycle %u capture=%s stop=%s", cycle, esp_err_to_name(err), esp_err_to_name(stopped));
         if (err != ESP_OK || stopped != ESP_OK) {
             return;

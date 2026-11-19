@@ -3,6 +3,12 @@ name: ESP-IDF build
 on:
   push:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish candis to the configured Registry namespace
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -15,10 +21,27 @@ jobs:
       IDF_REVISION: 2b10d1278a547f5dc92efbe516144b4ae85f80cb
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Check Registry configuration
+        if: github.event_name == 'workflow_dispatch' && inputs.publish
+        env:
+          REGISTRY_NAMESPACE: ${{ vars.IDF_COMPONENT_NAMESPACE }}
+          REGISTRY_TOKEN: ${{ secrets.IDF_COMPONENT_API_TOKEN }}
+        run: |
+          test "$GITHUB_REF" = 'refs/heads/main' || { echo 'Run this workflow from main'; exit 1; }
+          test -n "$REGISTRY_NAMESPACE" || { echo 'Set the IDF_COMPONENT_NAMESPACE repository variable'; exit 1; }
+          test -n "$REGISTRY_TOKEN" || { echo 'Set the IDF_COMPONENT_API_TOKEN repository secret'; exit 1; }
       - name: Install host dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake ninja-build ccache libffi-dev libssl-dev libusb-1.0-0
+          packages=()
+          command -v cmake >/dev/null || packages+=(cmake)
+          command -v ninja >/dev/null || packages+=(ninja-build)
+          if ! dpkg-query -W -f='${db:Status-Status}' libusb-1.0-0 | grep -qx installed; then
+            packages+=(libusb-1.0-0)
+          fi
+          if ((${#packages[@]})); then
+            sudo timeout 180 apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update
+            sudo timeout 120 apt-get install -y "${packages[@]}"
+          fi
       - name: Fetch ESP-IDF and the S31 toolchain
         run: |
           git init "$RUNNER_TEMP/esp-idf"
@@ -40,9 +63,57 @@ jobs:
         run: |
           source "$RUNNER_TEMP/esp-idf/export.sh"
           python3 -m unittest discover -s tests -v
-      - name: Package the component
+      - name: Build with the packed Candis component
         run: |
           source "$RUNNER_TEMP/esp-idf/export.sh"
-          compote component pack --project-dir components/candis --name candis --dest-dir "$RUNNER_TEMP/candis-package"
+          package_dir="$RUNNER_TEMP/candis-package"
+          compote component pack --project-dir components/candis --name candis --dest-dir "$package_dir"
+          mkdir -p "$package_dir/candis"
+          tar -xf "$package_dir"/candis_*.tgz -C "$package_dir/candis"
+          consumer="$RUNNER_TEMP/candis-package-consumer"
+          mkdir -p "$consumer/main"
+          cp examples/display/{CMakeLists.txt,sdkconfig.defaults} "$consumer/"
+          cp examples/display/main/{CMakeLists.txt,Kconfig.projbuild,main.c} "$consumer/main/"
+          printf 'dependencies:\n  candis:\n    path: ../../candis-package/candis\n' > "$consumer/main/idf_component.yml"
+          idf.py --preview -C "$consumer" build
       - name: Check whitespace
         run: git show --format= --check HEAD
+      - name: Validate Candis on the ESP Component Registry
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          source "$RUNNER_TEMP/esp-idf/export.sh"
+          compote component upload --dry-run --project-dir components/candis --name candis \
+            --commit-sha "$GITHUB_SHA" --dest-dir "$RUNNER_TEMP/candis-registry-check"
+      - name: Publish Candis on the ESP Component Registry
+        if: github.event_name == 'workflow_dispatch' && inputs.publish
+        uses: espressif/upload-components-ci-action@2ce17d73e35473317c1419dbd4f007aacb593040 # v2.2.1
+        with:
+          api_token: ${{ secrets.IDF_COMPONENT_API_TOKEN }}
+          namespace: ${{ vars.IDF_COMPONENT_NAMESPACE }}
+          components: candis:components/candis
+          repository_url: https://github.com/jlclab-io/candis-bsp.git
+      - name: Build with Candis downloaded from the Registry
+        if: github.event_name == 'workflow_dispatch' && inputs.publish
+        env:
+          REGISTRY_NAMESPACE: ${{ vars.IDF_COMPONENT_NAMESPACE }}
+        run: |
+          source "$RUNNER_TEMP/esp-idf/export.sh"
+          version="$(python3 -c 'import yaml; print(yaml.safe_load(open("components/candis/idf_component.yml"))["version"])')"
+          consumer="$RUNNER_TEMP/candis-registry-consumer"
+          mkdir -p "$consumer/main"
+          cp examples/display/{CMakeLists.txt,sdkconfig.defaults} "$consumer/"
+          cp examples/display/main/{CMakeLists.txt,Kconfig.projbuild,main.c} "$consumer/main/"
+          idf.py --preview -C "$consumer" add-dependency "$REGISTRY_NAMESPACE/candis==$version"
+          idf.py --preview -C "$consumer" build
+          python3 - "$consumer/managed_components/${REGISTRY_NAMESPACE}__candis/idf_component.yml" "$version" <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+
+          import yaml
+
+          manifest = yaml.safe_load(Path(sys.argv[1]).read_text())
+          expected_sha = os.environ["GITHUB_SHA"]
+          if manifest["version"] != sys.argv[2] or manifest["repository_info"]["commit_sha"] != expected_sha:
+              sys.exit(f"The Registry archive does not match version {sys.argv[2]} at {expected_sha}")
+          PY

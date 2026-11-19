@@ -1,9 +1,10 @@
 version: "0.1.0"
 description: OV5640 DVP capture for the Candis validation fixture
 license: Apache-2.0
+url: https://github.com/jlclab-io/candis-bsp/tree/main/components/candis_ov5640
 repository: https://github.com/jlclab-io/candis-bsp.git
 repository_info:
-  path: components/candis_camera
+  path: components/candis_ov5640
 targets:
   - esp32s31
 dependencies:
@@ -12,3 +13,4 @@ dependencies:
     path: ../candis
     public: true
   espressif/esp_video: "2.5.0"
+  espressif/esp_cam_sensor: "2.6.0"

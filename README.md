@@ -5,9 +5,16 @@ BSP 组件 `candis` 面向 Candis 硬件修订 1.2，可独立于扩展板运行
 组件软件版本使用语义化版本。
 
 本仓库处于开发预览阶段。已集成共享主 I²C、ST7801N QSPI 显示、TE 同步、亮度、CST9220
-双触点读取、RX8130CE 日历读取和 TF 卡挂载。音频为可选功能。BB 和 Gamepad 作为独立组件，
-综合测试板 OV5640 提供可选 DVP 组件，BMI270 六轴采样可按需启用。实板使用范围见硬件文档。整机低功耗仍需集成验证。
+双触点读取、RX8130CE 日历读取和 TF 卡挂载。音频和 BMI270 六轴采样可按需启用。
+实板使用范围见硬件文档。整机低功耗仍需集成验证。
 参见 [API 参考](docs/api.md) 和 [硬件与实测](docs/hardware.md)。
+
+| 组件 | 用途 |
+| --- | --- |
+| [`candis`](components/candis) | 主 BSP，可独立使用 |
+| [`candis_ov5640`](components/candis_ov5640) | 综合测试板 OV5640 DVP 取流 |
+| [`candis_bb`](components/candis_bb) | BB 扩展板支持 |
+| [`candis_gamepad`](components/candis_gamepad) | Gamepad 扩展板支持 |
 
 ## 构建示例
 
@@ -118,3 +125,15 @@ esp_err_t app_display_start(void)
   HP I²C 引用。屏幕使用 SPI2 和 TG28 的 ALDO1，两者由 BSP 统一管理。
 
 许可证为 [Apache-2.0](LICENSE)。
+
+## 维护与发布
+
+GitHub Actions 构建六个独立示例、运行主机测试，并从 `compote` 生成的
+`candis` 包构建独立应用。Registry 工作流通过 `IDF_COMPONENT_NAMESPACE`
+仓库变量指定实际命名空间。正式上传使用 `IDF_COMPONENT_API_TOKEN` 仓库密钥。
+在 `main` 手动运行 **ESP-IDF build**，默认向 Registry 提交校验且跳过版本创建。
+预检通过后可启用 `publish` 发布清单中的版本。该次运行随后通过 Registry
+下载指定版本，构建独立显示示例并核对包记录的 Git 提交。
+
+扩展组件目前通过本地路径联调。它们各自发布时需引用已发布的
+`candis` 版本，并在独立应用验证其依赖解析及实际硬件组合。

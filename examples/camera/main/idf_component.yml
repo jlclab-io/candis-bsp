@@ -1,4 +1,4 @@
 dependencies:
-  candis_camera:
-    path: ../../../components/candis_camera
+  candis_ov5640:
+    path: ../../../components/candis_ov5640
   espressif/esp_video: "2.5.0"

@@ -12,13 +12,17 @@ dependencies:
       version: 9.6.0~1
     - name: espressif/esp_codec_dev
       version: 1.6.2
+    - name: espressif/bmi270
+      rules:
+      - if: $CONFIG{CANDIS_IMU} == True
+      version: 1.1.0
     source:
       path: ../../components/candis
       type: local
     targets:
     - esp32s31
     version: 0.1.0
-  candis_camera:
+  candis_ov5640:
     dependencies:
     - name: idf
       version: '>=6.2,<6.3'
@@ -27,8 +31,10 @@ dependencies:
       public: true
     - name: espressif/esp_video
       version: 2.5.0
+    - name: espressif/esp_cam_sensor
+      version: 2.6.0
     source:
-      path: ../../components/candis_camera
+      path: ../../components/candis_ov5640
       type: local
     targets:
     - esp32s31
@@ -254,8 +260,8 @@ dependencies:
       type: service
     version: 9.6.0~1
 direct_dependencies:
-- candis_camera
+- candis_ov5640
 - espressif/esp_video
-manifest_hash: ce22bcc15ecc130263bda6eb29764f38ecdd44e19f5e5f4862910c8a40d7e5dc
+manifest_hash: 9fc8d6a550ab3a98056763859378b016ff73f6d59c27a79facd46701ef434717
 target: esp32s31
 version: 3.0.0

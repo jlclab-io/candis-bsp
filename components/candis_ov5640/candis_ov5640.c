@@ -2,16 +2,16 @@
 /* Candis validation fixture OV5640 DVP route. */
 #include <fcntl.h>
 #include <unistd.h>
-#include "bsp/candis_camera.h"
+#include "bsp/candis_ov5640.h"
 #include "bsp/candis_fixture.h"
-#include "esp_cam_sensor_xclk.h"
+#include "driver/ledc.h"
 #include "esp_check.h"
 #include "esp_video_device.h"
 #include "esp_video_init.h"
 
-static const char *TAG = "candis_camera";
-static esp_cam_sensor_xclk_handle_t s_xclk;
-static bool s_clock_on;
+static const char *TAG = "candis_ov5640";
+static bool s_clock_timer;
+static bool s_clock_channel;
 static bool s_power;
 static bool s_video;
 
@@ -20,15 +20,18 @@ static esp_err_t start_camera(void)
     i2c_master_bus_handle_t bus;
     ESP_RETURN_ON_ERROR(candis_fixture_camera_acquire(&bus), TAG, "power camera seat");
     s_power = true;
-    ESP_RETURN_ON_ERROR(esp_cam_sensor_xclk_allocate(ESP_CAM_SENSOR_XCLK_LEDC, &s_xclk), TAG, "allocate sensor clock");
-    const esp_cam_sensor_xclk_config_t clock = {
-        .ledc_cfg = {
-            .timer = LEDC_TIMER_1, .clk_cfg = LEDC_AUTO_CLK, .channel = LEDC_CHANNEL_1,
-            .xclk_freq_hz = 24000000, .xclk_pin = GPIO_NUM_55,
-        },
+    const ledc_timer_config_t clock = {
+        .speed_mode = LEDC_LOW_SPEED_MODE, .timer_num = LEDC_TIMER_1,
+        .clk_cfg = LEDC_AUTO_CLK, .duty_resolution = LEDC_TIMER_1_BIT, .freq_hz = 24000000,
     };
-    ESP_RETURN_ON_ERROR(esp_cam_sensor_xclk_start(s_xclk, &clock), TAG, "start 24 MHz XCLK");
-    s_clock_on = true;
+    ESP_RETURN_ON_ERROR(ledc_timer_config(&clock), TAG, "configure XCLK timer");
+    s_clock_timer = true;
+    const ledc_channel_config_t output = {
+        .speed_mode = LEDC_LOW_SPEED_MODE, .channel = LEDC_CHANNEL_1,
+        .timer_sel = LEDC_TIMER_1, .gpio_num = GPIO_NUM_55, .duty = 1,
+    };
+    ESP_RETURN_ON_ERROR(ledc_channel_config(&output), TAG, "start 24 MHz XCLK");
+    s_clock_channel = true;
     const esp_video_init_dvp_config_t dvp = {
         .sccb_config = {.init_sccb = false, .i2c_handle = bus, .freq = 100000},
         .reset_pin = GPIO_NUM_39, .pwdn_pin = GPIO_NUM_40,
@@ -49,36 +52,44 @@ static esp_err_t start_camera(void)
     return close(fd) == 0 ? ESP_OK : ESP_FAIL;
 }
 
-esp_err_t candis_camera_start(void)
+esp_err_t candis_ov5640_start(void)
 {
-    if (s_power || s_xclk || s_video) {
+    if (s_power || s_clock_timer || s_video) {
         return ESP_ERR_INVALID_STATE;
     }
     esp_err_t err = start_camera();
     if (err != ESP_OK) {
-        ESP_ERROR_CHECK_WITHOUT_ABORT(candis_camera_stop());
+        ESP_ERROR_CHECK_WITHOUT_ABORT(candis_ov5640_stop());
     }
     return err;
 }
 
-const char *candis_camera_device(void)
+const char *candis_ov5640_device(void)
 {
     return s_video ? ESP_VIDEO_DVP_DEVICE_NAME : NULL;
 }
 
-esp_err_t candis_camera_stop(void)
+esp_err_t candis_ov5640_stop(void)
 {
     if (s_video) {
         ESP_RETURN_ON_ERROR(esp_video_deinit_with_flags(ESP_VIDEO_INIT_FLAGS_DVP), TAG, "release DVP video");
         s_video = false;
     }
-    if (s_clock_on) {
-        ESP_RETURN_ON_ERROR(esp_cam_sensor_xclk_stop(s_xclk), TAG, "stop XCLK");
-        s_clock_on = false;
+    if (s_clock_channel) {
+        const ledc_channel_config_t output = {
+            .speed_mode = LEDC_LOW_SPEED_MODE, .channel = LEDC_CHANNEL_1, .deconfigure = true,
+        };
+        ESP_RETURN_ON_ERROR(ledc_stop(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, 0), TAG, "stop XCLK");
+        ESP_RETURN_ON_ERROR(ledc_channel_config(&output), TAG, "release XCLK channel and pin");
+        s_clock_channel = false;
     }
-    if (s_xclk) {
-        ESP_RETURN_ON_ERROR(esp_cam_sensor_xclk_free(s_xclk), TAG, "release XCLK");
-        s_xclk = NULL;
+    if (s_clock_timer) {
+        const ledc_timer_config_t clock = {
+            .speed_mode = LEDC_LOW_SPEED_MODE, .timer_num = LEDC_TIMER_1, .deconfigure = true,
+        };
+        ESP_RETURN_ON_ERROR(ledc_timer_pause(LEDC_LOW_SPEED_MODE, LEDC_TIMER_1), TAG, "pause XCLK timer");
+        ESP_RETURN_ON_ERROR(ledc_timer_config(&clock), TAG, "release XCLK timer");
+        s_clock_timer = false;
     }
     if (s_power) {
         ESP_RETURN_ON_ERROR(candis_fixture_camera_release(), TAG, "release camera power");
