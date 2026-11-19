@@ -27,6 +27,8 @@ idf.py --preview -C examples/motion build
 示例开启 PSRAM，默认采用 50 MHz QSPI 和综合测试板 USB Serial/JTAG
 控制台。屏幕需由有效的 3.3 V ALDO1 电源轨供电。用 `menuconfig` 的
 **Candis display example** 启用台架电源管理、80 MHz QSPI 和自动采样。
+可在同一菜单通过 `CANDIS_BENCH_ASYNC_FLUSH` 开启异步刷新对照。示例日志的
+`touch_poll_gap_max_us` 表示采样窗口内最长的触摸轮询间隔。
 USB Serial/JTAG 与 Candis USB OTG 是两个接口，烧录时应先核对串口和分区。
 
 显示复测可在干净的示例配置中叠加 `sdkconfig.bench`（把 `SDKCONFIG_DEFAULTS`

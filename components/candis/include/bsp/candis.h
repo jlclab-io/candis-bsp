@@ -28,6 +28,8 @@ typedef struct {
     bool manage_panel_power;
     /** Request 80 MHz for the characterized bench setup. Default is 50 MHz. */
     bool bench_qspi_80mhz;
+    /** Overlap LVGL and panel IO using an additional 450 KiB of PSRAM. */
+    bool async_flush;
 } candis_display_config_t;
 
 #define CANDIS_DISPLAY_CONFIG_DEFAULT() {     .brightness_percent = 50, .enable_touch = true, .sync_to_te = true, }

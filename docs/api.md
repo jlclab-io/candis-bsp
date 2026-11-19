@@ -23,12 +23,16 @@ GPIO6/7 为主 I²C。BSP 的设备与应用共享同一个 HP I²C 实例。每
 用 `candis_display_start()` 设置亮度、TE 与触摸选项，并获取具体错误。默认所需的
 ALDO1 电源条件和台架频率见 [硬件与实测](hardware.md)。
 
+`candis_display_config_t.async_flush` 默认为关闭。显式开启后，BSP 额外分配
+450 KiB PSRAM，在独立任务中等待 TE 并传输已完成的图像。发送任务忙时，LVGL
+继续合成，待发送区域合并到下一次提交。
+
 应用任务使用 `bsp_display_lock()` 和 `bsp_display_unlock()` 操作 LVGL。
 `candis_display_get_touch_points()` 在持锁时返回每个触点的坐标与跟踪 ID。
 读到控制器暂未更新数据时继续保留上次报告。应用读取到零触点时应结束当前触摸。
 如需停止显示，从控制任务取消应用定时器，再调用 `candis_display_stop()`。
 
-`candis_display_get_stats()` 返回累计的 LVGL 提交帧数、像素数、帧准备时间、等 TE 时间、
+`candis_display_get_stats()` 返回累计传输成功的帧数、像素数、帧准备时间、等 TE 时间、
 传输时间及错误。用两次快照求差值计算 FPS；比较时使用相同负载、频率和屏上区域。
 
 ## 电源与 RTC

@@ -13,7 +13,9 @@ static lv_obj_t *s_view;
 static lv_obj_t *s_tiles[16];
 static lv_obj_t *s_markers[2];
 static lv_timer_t *s_animation;
-static lv_timer_t *s_contacts;
+static lv_indev_read_cb_t s_read_touch;
+static int64_t s_last_touch_poll_us;
+static uint32_t s_touch_poll_gap_max_us;
 static bool s_full;
 static unsigned s_step;
 
@@ -42,9 +44,17 @@ static void change_mode(lv_event_t *event)
     select_mode(lv_event_get_user_data(event) != NULL);
 }
 
-static void show_contacts(lv_timer_t *timer)
+static void read_and_show_contacts(lv_indev_t *input, lv_indev_data_t *data)
 {
-    (void)timer;
+    const int64_t now_us = esp_timer_get_time();
+    if (s_last_touch_poll_us) {
+        const int64_t gap_us = now_us - s_last_touch_poll_us;
+        if (gap_us > s_touch_poll_gap_max_us) {
+            s_touch_poll_gap_max_us = gap_us > UINT32_MAX ? UINT32_MAX : (uint32_t)gap_us;
+        }
+    }
+    s_last_touch_poll_us = now_us;
+    s_read_touch(input, data);
     candis_touch_point_t points[2];
     unsigned count = candis_display_get_touch_points(points);
     for (unsigned i = 0; i < 2; ++i) {
@@ -73,6 +83,15 @@ static esp_err_t setup_ui(lv_display_t *display)
 {
     if (!bsp_display_lock(2000)) {
         return ESP_ERR_TIMEOUT;
+    }
+    lv_indev_t *input = lv_indev_get_next(NULL);
+    while (input && (lv_indev_get_display(input) != display || lv_indev_get_type(input) != LV_INDEV_TYPE_POINTER)) {
+        input = lv_indev_get_next(input);
+    }
+    s_read_touch = input ? lv_indev_get_read_cb(input) : NULL;
+    if (!s_read_touch) {
+        bsp_display_unlock();
+        return ESP_ERR_NOT_FOUND;
     }
     lv_obj_t *screen = lv_display_get_screen_active(display);
     lv_obj_set_scrollable(screen, false);
@@ -103,9 +122,11 @@ static esp_err_t setup_ui(lv_display_t *display)
         lv_obj_set_hidden(s_markers[i], true);
     }
     s_animation = lv_timer_create(animate, 5, NULL);
-    s_contacts = lv_timer_create(show_contacts, 10, NULL);
+    s_last_touch_poll_us = 0;
+    s_touch_poll_gap_max_us = 0;
+    lv_indev_set_read_cb(input, read_and_show_contacts);
     bsp_display_unlock();
-    return s_animation && s_contacts ? ESP_OK : ESP_ERR_NO_MEM;
+    return s_animation ? ESP_OK : ESP_ERR_NO_MEM;
 }
 
 static esp_err_t sample(const char *label, unsigned duration_ms)
@@ -115,25 +136,36 @@ static esp_err_t sample(const char *label, unsigned duration_ms)
     if (err != ESP_OK) {
         return err;
     }
+    if (!bsp_display_lock(2000)) {
+        return ESP_ERR_TIMEOUT;
+    }
+    s_touch_poll_gap_max_us = 0;
+    bsp_display_unlock();
     const int64_t start_us = esp_timer_get_time();
     vTaskDelay(pdMS_TO_TICKS(duration_ms));
     err = candis_display_get_stats(&after);
     if (err != ESP_OK) {
         return err;
     }
+    if (!bsp_display_lock(2000)) {
+        return ESP_ERR_TIMEOUT;
+    }
+    const uint32_t touch_gap_us = s_touch_poll_gap_max_us;
+    bsp_display_unlock();
     const int64_t elapsed = esp_timer_get_time() - start_us;
     const uint64_t frames = after.frames - before.frames;
     const uint64_t pixels = after.pixels - before.pixels;
     ESP_LOGI(TAG, "%s frames=%" PRIu64 " fps=%.2f te_hz=%.2f mean_pixels=%" PRIu64
              " prepare_us=%" PRIu64 " mean_transfer_us=%" PRIu64 " te_wait_us=%" PRIu64
-             " te_timeouts=%" PRIu32 " transfer_errors=%" PRIu32 " touch_errors=%" PRIu32,
+             " te_timeouts=%" PRIu32 " transfer_errors=%" PRIu32 " touch_errors=%" PRIu32
+             " touch_poll_gap_max_us=%" PRIu32,
              label, frames, frames * 1000000.0 / elapsed,
              (after.te_edges - before.te_edges) * 1000000.0 / elapsed,
              frames ? pixels / frames : 0, frames ? (after.prepare_us - before.prepare_us) / frames : 0,
              frames ? (after.transfer_us - before.transfer_us) / frames : 0,
              frames ? (after.te_wait_us - before.te_wait_us) / frames : 0,
              after.te_timeouts - before.te_timeouts, after.transfer_errors - before.transfer_errors,
-             after.touch_errors - before.touch_errors);
+             after.touch_errors - before.touch_errors, touch_gap_us);
     return ESP_OK;
 }
 
@@ -146,9 +178,13 @@ void app_main(void)
 #ifdef CONFIG_CANDIS_BENCH_QSPI_80MHZ
     config.bench_qspi_80mhz = true;
 #endif
+#ifdef CONFIG_CANDIS_BENCH_ASYNC_FLUSH
+    config.async_flush = true;
+#endif
     lv_display_t *display;
     ESP_ERROR_CHECK(candis_display_start(&config, &display));
-    ESP_LOGI(TAG, "display started at %d MHz", config.bench_qspi_80mhz ? 80 : 50);
+    ESP_LOGI(TAG, "display started at %d MHz, async_flush=%d", config.bench_qspi_80mhz ? 80 : 50,
+             config.async_flush);
     ESP_ERROR_CHECK(setup_ui(display));
 #ifdef CONFIG_CANDIS_BENCH_AUTORUN
     vTaskDelay(pdMS_TO_TICKS(1000));
@@ -164,7 +200,6 @@ void app_main(void)
         abort();
     }
     lv_timer_delete(s_animation);
-    lv_timer_delete(s_contacts);
     bsp_display_unlock();
     ESP_ERROR_CHECK(candis_display_stop());
     ESP_LOGI(TAG, "display stopped");

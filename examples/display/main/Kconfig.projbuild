@@ -16,4 +16,10 @@ config CANDIS_BENCH_AUTORUN
     bool "Automatically measure partial/full refresh and restart the display"
     default n
 
+config CANDIS_BENCH_ASYNC_FLUSH
+    bool "Overlap LVGL and AMOLED transfers"
+    default n
+    help
+        Use an additional PSRAM framebuffer for the comparison.
+
 endmenu

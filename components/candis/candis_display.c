@@ -14,6 +14,7 @@
 #include "esp_lvgl_port.h"
 #include "esp_timer.h"
 #include "freertos/semphr.h"
+#include "freertos/task.h"
 
 #define PANEL_HOST SPI2_HOST
 #define PANEL_RESET GPIO_NUM_2
@@ -27,6 +28,7 @@ static const char *TAG = "candis_display";
 static atomic_bool s_port_ready;
 static atomic_bool s_active;
 static atomic_uint s_te_edges;
+static portMUX_TYPE s_stats_lock = portMUX_INITIALIZER_UNLOCKED;
 static struct {
     candis_power_t power;
     esp_lcd_panel_io_handle_t panel_io;
@@ -44,6 +46,15 @@ static struct {
     int64_t refresh_start_us;
     candis_touch_point_t points[TOUCH_POINTS];
     candis_display_stats_t stats;
+    SemaphoreHandle_t panel_idle;
+    TaskHandle_t panel_task;
+    uint16_t *scanout;
+    lv_area_t submitted;
+    bool stale_rows[BSP_LCD_V_RES];
+    uint32_t prepare_us;
+    uint32_t submitted_prepare_us;
+    bool submitted_failed;
+    bool panel_stopping;
     uint8_t point_count;
     bool dirty_valid;
     bool sync_to_te;
@@ -184,7 +195,7 @@ static bool drain_dma(void)
     return true;
 }
 
-static bool send_dirty_area(const lv_area_t *dirty)
+static bool send_dirty_area(const uint16_t *frame, const lv_area_t *dirty)
 {
     if (!drain_dma()) {
         return false;
@@ -197,7 +208,7 @@ static bool send_dirty_area(const lv_area_t *dirty)
         uint8_t *buffer = s_display.transfer[slot];
         for (int y = top; y < bottom; ++y) {
             uint8_t *dst = buffer + (y - top) * width * 2;
-            const uint16_t *src = s_display.frame + y * BSP_LCD_H_RES + dirty->x1;
+            const uint16_t *src = frame + y * BSP_LCD_H_RES + dirty->x1;
             memcpy(dst, src, width * sizeof(*src));
         }
         lv_draw_sw_rgb565_swap(buffer, width * (bottom - top));
@@ -214,15 +225,58 @@ static bool send_dirty_area(const lv_area_t *dirty)
     return drain_dma();
 }
 
-static void flush_display(lv_display_t *display, const lv_area_t *area, uint8_t *pixels)
+static bool transfer_frame(const uint16_t *frame, const lv_area_t *dirty, uint32_t prepare_us)
 {
-    const int width = lv_area_get_width(area);
-    const unsigned stride = lv_draw_buf_width_to_stride(width, LV_COLOR_FORMAT_RGB565);
-    for (int y = area->y1; y <= area->y2; ++y) {
-        const uint16_t *src = (const uint16_t *)(pixels + (y - area->y1) * stride);
-        uint16_t *dst = s_display.frame + y * BSP_LCD_H_RES + area->x1;
-        memcpy(dst, src, width * sizeof(*dst));
+    const int64_t wait_start = esp_timer_get_time();
+    bool te_timeout = false;
+    if (s_display.sync_to_te) {
+        xSemaphoreTake(s_display.te, 0);
+        te_timeout = !xSemaphoreTake(s_display.te, pdMS_TO_TICKS(40) + 1);
     }
+    const int64_t transfer_start = esp_timer_get_time();
+    const bool sent = send_dirty_area(frame, dirty);
+    const uint32_t transfer_us = esp_timer_get_time() - transfer_start;
+    portENTER_CRITICAL(&s_stats_lock);
+    s_display.stats.te_timeouts += te_timeout;
+    s_display.stats.te_wait_us += transfer_start - wait_start;
+    if (sent) {
+        ++s_display.stats.frames;
+        s_display.stats.prepare_us += prepare_us;
+        s_display.stats.pixels += lv_area_get_size(dirty);
+        s_display.stats.transfer_us += transfer_us;
+        s_display.stats.last_transfer_us = transfer_us;
+        s_display.stats.max_transfer_us = LV_MAX(s_display.stats.max_transfer_us, transfer_us);
+    }
+    bool log_error = false;
+    if (!sent) {
+        log_error = s_display.stats.transfer_errors % 100 == 0;
+        ++s_display.stats.transfer_errors;
+    }
+    portEXIT_CRITICAL(&s_stats_lock);
+    if (log_error) {
+        ESP_LOGW(TAG, "display transfer failed; retrying on refresh");
+    }
+    return sent;
+}
+
+static void panel_task(void *arg)
+{
+    (void)arg;
+    for (;;) {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        if (s_display.panel_stopping) {
+            xSemaphoreGive(s_display.panel_idle);
+            vTaskDelete(NULL);
+            return;
+        }
+        s_display.submitted_failed = !transfer_frame(s_display.scanout, &s_display.submitted,
+                                                     s_display.submitted_prepare_us);
+        xSemaphoreGive(s_display.panel_idle);
+    }
+}
+
+static void add_dirty(const lv_area_t *area)
+{
     if (s_display.dirty_valid) {
         s_display.dirty.x1 = LV_MIN(s_display.dirty.x1, area->x1);
         s_display.dirty.y1 = LV_MIN(s_display.dirty.y1, area->y1);
@@ -232,34 +286,77 @@ static void flush_display(lv_display_t *display, const lv_area_t *area, uint8_t 
         s_display.dirty = *area;
         s_display.dirty_valid = true;
     }
-    if (lv_display_flush_is_last(display)) {
-        int64_t started = esp_timer_get_time();
-        if (s_display.sync_to_te) {
-            xSemaphoreTake(s_display.te, 0);
-            if (!xSemaphoreTake(s_display.te, pdMS_TO_TICKS(40) + 1)) {
-                ++s_display.stats.te_timeouts;
-            }
+}
+
+static void sync_row(unsigned row)
+{
+    const size_t offset = row * BSP_LCD_H_RES + s_display.submitted.x1;
+    memcpy(s_display.frame + offset, s_display.scanout + offset,
+           lv_area_get_width(&s_display.submitted) * sizeof(uint16_t));
+}
+
+static void submit_frame(void)
+{
+    if (!xSemaphoreTake(s_display.panel_idle, 0)) {
+        lv_timer_resume(s_display.retry);
+        return;
+    }
+    if (s_display.submitted_failed) {
+        add_dirty(&s_display.submitted);
+        s_display.submitted_failed = false;
+    }
+    if (!s_display.dirty_valid) {
+        xSemaphoreGive(s_display.panel_idle);
+        lv_timer_pause(s_display.retry);
+        return;
+    }
+    const int64_t started = esp_timer_get_time();
+    const lv_area_t dirty = s_display.dirty;
+    for (int row = s_display.submitted.y1; row <= s_display.submitted.y2; ++row) {
+        if (s_display.stale_rows[row]) {
+            sync_row(row);
+            s_display.stale_rows[row] = false;
         }
-        int64_t transfer_start = esp_timer_get_time();
-        s_display.stats.te_wait_us += transfer_start - started;
-        bool sent = send_dirty_area(&s_display.dirty);
-        uint32_t transfer_us = esp_timer_get_time() - transfer_start;
-        if (sent) {
-            lv_timer_pause(s_display.retry);
-            ++s_display.stats.frames;
-            s_display.stats.prepare_us += started - s_display.refresh_start_us;
-            s_display.stats.pixels += lv_area_get_size(&s_display.dirty);
-            s_display.stats.transfer_us += transfer_us;
-            s_display.stats.last_transfer_us = transfer_us;
-            s_display.stats.max_transfer_us = LV_MAX(transfer_us, s_display.stats.max_transfer_us);
-        } else {
-            if (!(s_display.stats.transfer_errors % 100)) {
-                ESP_LOGW(TAG, "display transfer failed; retrying on refresh");
+    }
+    uint16_t *previous = s_display.scanout;
+    s_display.scanout = s_display.frame;
+    s_display.frame = previous;
+    memset(s_display.stale_rows + dirty.y1, 1, lv_area_get_height(&dirty));
+    /* The worker owns the snapshot until it releases panel_idle. */
+    s_display.submitted = dirty;
+    s_display.submitted_prepare_us = s_display.prepare_us + (esp_timer_get_time() - started);
+    s_display.dirty_valid = false;
+    lv_timer_resume(s_display.retry);
+    xTaskNotifyGive(s_display.panel_task);
+}
+
+static void flush_display(lv_display_t *display, const lv_area_t *area, uint8_t *pixels)
+{
+    const int width = lv_area_get_width(area);
+    const unsigned stride = lv_draw_buf_width_to_stride(width, LV_COLOR_FORMAT_RGB565);
+    for (int y = area->y1; y <= area->y2; ++y) {
+        /* Reuse the previous frame only where this row will not be overwritten. */
+        if (s_display.stale_rows[y]) {
+            if (area->x1 > s_display.submitted.x1 || area->x2 < s_display.submitted.x2) {
+                sync_row(y);
             }
-            ++s_display.stats.transfer_errors;
+            s_display.stale_rows[y] = false;
+        }
+        const uint16_t *src = (const uint16_t *)(pixels + (y - area->y1) * stride);
+        uint16_t *dst = s_display.frame + y * BSP_LCD_H_RES + area->x1;
+        memcpy(dst, src, width * sizeof(*dst));
+    }
+    add_dirty(area);
+    if (lv_display_flush_is_last(display)) {
+        s_display.prepare_us = esp_timer_get_time() - s_display.refresh_start_us;
+        if (s_display.panel_task) {
+            submit_frame();
+        } else if (transfer_frame(s_display.frame, &s_display.dirty, s_display.prepare_us)) {
+            lv_timer_pause(s_display.retry);
+            s_display.dirty_valid = false;
+        } else {
             lv_timer_resume(s_display.retry);
         }
-        s_display.dirty_valid = !sent;
     }
     lv_display_flush_ready(display);
 }
@@ -301,6 +398,10 @@ static esp_err_t touch_init(void)
 
 static void retry_refresh(lv_timer_t *timer)
 {
+    if (s_display.panel_task) {
+        submit_frame();
+        return;
+    }
     lv_display_t *display = lv_timer_get_user_data(timer);
     lv_obj_invalidate(lv_display_get_screen_active(display));
 }
@@ -328,7 +429,7 @@ static esp_err_t ui_create(const candis_display_config_t *config)
         lv_obj_t *screen = lv_display_get_screen_active(s_display.display);
         lv_obj_set_style_bg_color(screen, lv_color_black(), 0);
         lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
-        s_display.retry = lv_timer_create(retry_refresh, 100, s_display.display);
+        s_display.retry = lv_timer_create(retry_refresh, s_display.panel_task ? 5 : 100, s_display.display);
         if (s_display.retry) {
             lv_timer_pause(s_display.retry);
             if (config->enable_touch) {
@@ -375,6 +476,18 @@ static esp_err_t release_display(void)
         s_display.display = NULL;
         lvgl_port_unlock();
     }
+    if (s_display.panel_task) {
+        const TickType_t timeout = pdMS_TO_TICKS(2000) + 1;
+        if (!s_display.panel_stopping) {
+            ESP_RETURN_ON_FALSE(xSemaphoreTake(s_display.panel_idle, timeout), ESP_ERR_TIMEOUT,
+                                TAG, "panel transfer still running");
+            s_display.panel_stopping = true;
+            xTaskNotifyGive(s_display.panel_task);
+        }
+        ESP_RETURN_ON_FALSE(xSemaphoreTake(s_display.panel_idle, timeout), ESP_ERR_TIMEOUT,
+                            TAG, "panel task still running");
+        s_display.panel_task = NULL;
+    }
     ESP_RETURN_ON_FALSE(drain_dma(), ESP_ERR_TIMEOUT, TAG, "panel DMA still pending");
     if (s_display.te_handler) {
         ESP_RETURN_ON_ERROR(gpio_isr_handler_remove(PANEL_TE), TAG, "remove TE handler");
@@ -417,6 +530,10 @@ static esp_err_t release_display(void)
     if (s_display.dma) {
         vSemaphoreDelete(s_display.dma);
     }
+    if (s_display.panel_idle) {
+        vSemaphoreDelete(s_display.panel_idle);
+    }
+    heap_caps_free(s_display.scanout);
     heap_caps_free(s_display.transfer[0]);
     heap_caps_free(s_display.transfer[1]);
     heap_caps_free(s_display.draw);
@@ -443,6 +560,16 @@ static esp_err_t start_display(const candis_display_config_t *config)
     ESP_RETURN_ON_ERROR(panel_init(config), TAG, "start panel");
     if (config->enable_touch) {
         ESP_RETURN_ON_ERROR(touch_init(), TAG, "start touch");
+    }
+    if (config->async_flush) {
+        s_display.scanout = heap_caps_calloc(FRAME_PIXELS, sizeof(uint16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        s_display.panel_idle = xSemaphoreCreateBinary();
+        ESP_RETURN_ON_FALSE(s_display.scanout && s_display.panel_idle, ESP_ERR_NO_MEM, TAG, "panel snapshot");
+        xSemaphoreGive(s_display.panel_idle);
+        const BaseType_t core = configNUMBER_OF_CORES > 1 ? 1 : 0;
+        ESP_RETURN_ON_FALSE(xTaskCreatePinnedToCore(panel_task, "candis_panel", 4096, NULL, 5,
+                                                   &s_display.panel_task, core) == pdPASS,
+                            ESP_ERR_NO_MEM, TAG, "panel task");
     }
     return ui_create(config);
 }
@@ -516,7 +643,13 @@ esp_err_t bsp_display_brightness_set(int brightness_percent)
     if (!bsp_display_lock(2000)) {
         return ESP_ERR_INVALID_STATE;
     }
-    esp_err_t err = drain_dma() ? panel_brightness(brightness_percent) : ESP_ERR_TIMEOUT;
+    esp_err_t err = ESP_ERR_TIMEOUT;
+    if (!s_display.panel_idle || xSemaphoreTake(s_display.panel_idle, pdMS_TO_TICKS(200) + 1)) {
+        err = drain_dma() ? panel_brightness(brightness_percent) : ESP_ERR_TIMEOUT;
+        if (s_display.panel_idle) {
+            xSemaphoreGive(s_display.panel_idle);
+        }
+    }
     bsp_display_unlock();
     return err;
 }
@@ -529,7 +662,9 @@ esp_err_t candis_display_get_stats(candis_display_stats_t *stats)
     if (!bsp_display_lock(2000)) {
         return ESP_ERR_INVALID_STATE;
     }
+    portENTER_CRITICAL(&s_stats_lock);
     *stats = s_display.stats;
+    portEXIT_CRITICAL(&s_stats_lock);
     stats->te_edges = atomic_load_explicit(&s_te_edges, memory_order_relaxed);
     bsp_display_unlock();
     return ESP_OK;
