@@ -20,6 +20,7 @@ idf.py --preview -C examples/display build
 idf.py --preview -C examples/diagnostics build
 idf.py --preview -C examples/expansion build
 idf.py --preview -C examples/camera build
+idf.py --preview -C examples/rtc build
 ```
 
 示例开启 PSRAM，默认采用 50 MHz QSPI 和综合测试板 USB Serial/JTAG
@@ -31,6 +32,10 @@ USB Serial/JTAG 与 Candis USB OTG 是两个接口，烧录时应先核对串口
 设为 `sdkconfig.defaults;sdkconfig.bench`）。诊断示例的 `sdkconfig.features`
 打开音频、TF 和 OTG CDC。综合测试板 TF 需另外选择 GPIO35 卡检测并按连接负载
 设置 DC1SW。扩展板示例执行显式探测，运行前须满足 GPIO58/59 与供电前置条件。
+
+RTC 示例通过综合测试板的 USB Serial/JTAG 提供命令行。输入 `READ` 读取 UTC 日历，
+`SET <UTC epoch>` 设置有效日历，`RECOVER <UTC epoch>` 允许恢复掉电后无效的日历。
+在主机执行 `date -u +%s` 获取当前 epoch。示例启动时只读日历。
 
 ## 在独立应用使用
 

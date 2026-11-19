@@ -34,10 +34,11 @@ jobs:
           idf.py --preview -C examples/diagnostics -D 'SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.features' build
           idf.py --preview -C examples/expansion build
           idf.py --preview -C examples/camera build
-      - name: Test the EEPROM decoder
+          idf.py --preview -C examples/rtc build
+      - name: Run host tests
         run: |
           source "$RUNNER_TEMP/esp-idf/export.sh"
-          python3 tests/test_baseboard.py -v
+          python3 -m unittest discover -s tests -v
       - name: Package the component
         run: |
           source "$RUNNER_TEMP/esp-idf/export.sh"
