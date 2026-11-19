@@ -35,7 +35,9 @@ idf.py --preview -C examples/motion build
 控制台。屏幕需由有效的 3.3 V ALDO1 电源轨供电。用 `menuconfig` 的
 **Candis display example** 启用台架电源管理、80 MHz QSPI 和自动采样。
 可在同一菜单通过 `CANDIS_BENCH_ASYNC_FLUSH` 开启异步刷新对照。示例日志的
-`touch_poll_gap_max_us` 表示采样窗口内最长的触摸轮询间隔。
+`touch_poll_gap_max_us` 表示采样窗口内最长的触摸轮询间隔。可设置
+`CANDIS_BENCH_ROUNDS` 重复局刷、全刷与停启，并比较每轮空闲堆和最大连续空闲块。
+台架配置还通过 FreeRTOS 空闲任务计数报告各核非空闲时间比例。
 USB Serial/JTAG 与 Candis USB OTG 是两个接口，烧录时应先核对串口和分区。
 
 摄像头示例启动后在 480×480 AMOLED 上全屏预览 OV5640 画面。综合测试板需接

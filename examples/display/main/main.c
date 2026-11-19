@@ -2,6 +2,7 @@
 #include <inttypes.h>
 #include <stdlib.h>
 #include "bsp/esp-bsp.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -18,6 +19,15 @@ static int64_t s_last_touch_poll_us;
 static uint32_t s_touch_poll_gap_max_us;
 static bool s_full;
 static unsigned s_step;
+
+#if CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS && CONFIG_FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER && !CONFIG_FREERTOS_SMP
+static void read_idle_time(configRUN_TIME_COUNTER_TYPE idle[configNUMBER_OF_CORES])
+{
+    for (BaseType_t core = 0; core < configNUMBER_OF_CORES; ++core) {
+        idle[core] = ulTaskGetIdleRunTimeCounterForCore(core);
+    }
+}
+#endif
 
 static void animate(lv_timer_t *timer)
 {
@@ -142,6 +152,10 @@ static esp_err_t sample(const char *label, unsigned duration_ms)
     s_touch_poll_gap_max_us = 0;
     bsp_display_unlock();
     const int64_t start_us = esp_timer_get_time();
+#if CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS && CONFIG_FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER && !CONFIG_FREERTOS_SMP
+    configRUN_TIME_COUNTER_TYPE idle_before[configNUMBER_OF_CORES], idle_after[configNUMBER_OF_CORES];
+    read_idle_time(idle_before);
+#endif
     vTaskDelay(pdMS_TO_TICKS(duration_ms));
     err = candis_display_get_stats(&after);
     if (err != ESP_OK) {
@@ -153,6 +167,9 @@ static esp_err_t sample(const char *label, unsigned duration_ms)
     const uint32_t touch_gap_us = s_touch_poll_gap_max_us;
     bsp_display_unlock();
     const int64_t elapsed = esp_timer_get_time() - start_us;
+#if CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS && CONFIG_FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER && !CONFIG_FREERTOS_SMP
+    read_idle_time(idle_after);
+#endif
     const uint64_t frames = after.frames - before.frames;
     const uint64_t pixels = after.pixels - before.pixels;
     ESP_LOGI(TAG, "%s frames=%" PRIu64 " fps=%.2f te_hz=%.2f mean_pixels=%" PRIu64
@@ -166,8 +183,25 @@ static esp_err_t sample(const char *label, unsigned duration_ms)
              frames ? (after.te_wait_us - before.te_wait_us) / frames : 0,
              after.te_timeouts - before.te_timeouts, after.transfer_errors - before.transfer_errors,
              after.touch_errors - before.touch_errors, touch_gap_us);
+#if CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS && CONFIG_FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER && !CONFIG_FREERTOS_SMP
+    for (BaseType_t core = 0; core < configNUMBER_OF_CORES; ++core) {
+        const configRUN_TIME_COUNTER_TYPE idle_us = idle_after[core] - idle_before[core];
+        ESP_LOGI(TAG, "%s cpu%d_busy_pct=%.1f", label, (int)core,
+                 100.0 * (1.0 - (double)LV_MIN(idle_us, (uint64_t)elapsed) / elapsed));
+    }
+#endif
     return ESP_OK;
 }
+
+#ifdef CONFIG_CANDIS_BENCH_AUTORUN
+static void log_heap(const char *phase, unsigned round)
+{
+    ESP_LOGI(TAG, "heap %s round=%u free_internal=%zu largest_internal=%zu free_psram=%zu largest_psram=%zu",
+             phase, round, heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+             heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+             heap_caps_get_free_size(MALLOC_CAP_SPIRAM), heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
+}
+#endif
 
 void app_main(void)
 {
@@ -187,25 +221,30 @@ void app_main(void)
              config.async_flush);
     ESP_ERROR_CHECK(setup_ui(display));
 #ifdef CONFIG_CANDIS_BENCH_AUTORUN
-    vTaskDelay(pdMS_TO_TICKS(1000));
-    ESP_ERROR_CHECK(sample("partial", 8000));
-    if (!bsp_display_lock(2000)) {
-        abort();
+    for (unsigned round = 1; round <= CONFIG_CANDIS_BENCH_ROUNDS; ++round) {
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        log_heap("active", round);
+        ESP_ERROR_CHECK(sample("partial", 8000));
+        if (!bsp_display_lock(2000)) {
+            abort();
+        }
+        select_mode(true);
+        bsp_display_unlock();
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        ESP_ERROR_CHECK(sample("full", 8000));
+        if (!bsp_display_lock(2000)) {
+            abort();
+        }
+        lv_timer_delete(s_animation);
+        bsp_display_unlock();
+        ESP_ERROR_CHECK(candis_display_stop());
+        vTaskDelay(pdMS_TO_TICKS(100));
+        log_heap("stopped", round);
+        ESP_LOGI(TAG, "display stopped");
+        ESP_ERROR_CHECK(candis_display_start(&config, &display));
+        ESP_ERROR_CHECK(setup_ui(display));
+        ESP_LOGI(TAG, "display restarted");
     }
-    select_mode(true);
-    bsp_display_unlock();
-    vTaskDelay(pdMS_TO_TICKS(1000));
-    ESP_ERROR_CHECK(sample("full", 8000));
-    if (!bsp_display_lock(2000)) {
-        abort();
-    }
-    lv_timer_delete(s_animation);
-    bsp_display_unlock();
-    ESP_ERROR_CHECK(candis_display_stop());
-    ESP_LOGI(TAG, "display stopped");
-    ESP_ERROR_CHECK(candis_display_start(&config, &display));
-    ESP_ERROR_CHECK(setup_ui(display));
-    ESP_LOGI(TAG, "display restarted");
 #endif
     while (true) {
         ESP_ERROR_CHECK(sample("live", 10000));
