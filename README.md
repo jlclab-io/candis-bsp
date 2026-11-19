@@ -132,8 +132,9 @@ GitHub Actions 构建六个独立示例、运行主机测试，并从 `compote` 
 `candis` 包构建独立应用。Registry 工作流通过 `IDF_COMPONENT_NAMESPACE`
 仓库变量指定实际命名空间。正式上传使用 `IDF_COMPONENT_API_TOKEN` 仓库密钥。
 在 `main` 手动运行 **ESP-IDF build**，默认向 Registry 提交校验且跳过版本创建。
-预检通过后可启用 `publish` 发布清单中的版本。该次运行随后通过 Registry
-下载指定版本，构建独立显示示例并核对包记录的 Git 提交。
+预检通过后可启用 `publish` 发布清单中的版本。发布包附带显示示例，引用同一
+Registry 命名空间下的确切版本。工作流从 Registry 下载并构建该示例，随后核对
+组件清单记录的 Git 提交。命名空间尚未配置时，预检中的示例使用固定的 Git 修订。
 
 扩展组件目前通过本地路径联调。它们各自发布时需引用已发布的
 `candis` 版本，并在独立应用验证其依赖解析及实际硬件组合。

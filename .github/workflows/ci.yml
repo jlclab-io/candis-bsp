@@ -78,6 +78,29 @@ jobs:
           idf.py --preview -C "$consumer" build
       - name: Check whitespace
         run: git show --format= --check HEAD
+      - name: Prepare the Registry display example
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          REGISTRY_NAMESPACE: ${{ vars.IDF_COMPONENT_NAMESPACE }}
+        run: |
+          source "$RUNNER_TEMP/esp-idf/export.sh"
+          version="$(python3 -c 'import yaml; print(yaml.safe_load(open("components/candis/idf_component.yml"))["version"])')"
+          echo "CANDIS_VERSION=$version" >> "$GITHUB_ENV"
+          example=components/candis/examples/display
+          mkdir -p "$example/main"
+          cp examples/display/{CMakeLists.txt,sdkconfig.defaults} "$example/"
+          cp examples/display/main/{CMakeLists.txt,Kconfig.projbuild,main.c} "$example/main/"
+          if [[ -n "$REGISTRY_NAMESPACE" ]]; then
+            printf 'dependencies:\n  %s/candis: "==%s"\n' "$REGISTRY_NAMESPACE" "$version" > "$example/main/idf_component.yml"
+          else
+            cat > "$example/main/idf_component.yml" <<YAML
+          dependencies:
+            candis:
+              git: https://github.com/jlclab-io/candis-bsp.git
+              path: components/candis
+              version: "$GITHUB_SHA"
+          YAML
+          fi
       - name: Validate Candis on the ESP Component Registry
         if: github.event_name == 'workflow_dispatch'
         run: |
@@ -98,14 +121,10 @@ jobs:
           REGISTRY_NAMESPACE: ${{ vars.IDF_COMPONENT_NAMESPACE }}
         run: |
           source "$RUNNER_TEMP/esp-idf/export.sh"
-          version="$(python3 -c 'import yaml; print(yaml.safe_load(open("components/candis/idf_component.yml"))["version"])')"
-          consumer="$RUNNER_TEMP/candis-registry-consumer"
-          mkdir -p "$consumer/main"
-          cp examples/display/{CMakeLists.txt,sdkconfig.defaults} "$consumer/"
-          cp examples/display/main/{CMakeLists.txt,Kconfig.projbuild,main.c} "$consumer/main/"
-          idf.py --preview -C "$consumer" add-dependency "$REGISTRY_NAMESPACE/candis==$version"
+          consumer="$RUNNER_TEMP/display"
+          idf.py --preview create-project-from-example --path "$consumer" "$REGISTRY_NAMESPACE/candis==$CANDIS_VERSION:display"
           idf.py --preview -C "$consumer" build
-          python3 - "$consumer/managed_components/${REGISTRY_NAMESPACE}__candis/idf_component.yml" "$version" <<'PY'
+          python3 - "$consumer/managed_components/${REGISTRY_NAMESPACE}__candis/idf_component.yml" "$CANDIS_VERSION" <<'PY'
           import os
           import sys
           from pathlib import Path
