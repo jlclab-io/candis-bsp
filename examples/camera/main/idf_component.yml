@@ -1,0 +1,4 @@
+dependencies:
+  candis_camera:
+    path: ../../../components/candis_camera
+  espressif/esp_video: "2.5.0"

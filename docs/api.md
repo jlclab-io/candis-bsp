@@ -63,3 +63,10 @@ DC1SW 同时给多个扩展设备供电。挂载时优先使用既有的电源�
 从 [硬件与实测](hardware.md) 检查 UART0、DC1SW 和扩展板前置条件。`candis_baseboard_probe()`
 读取描述符并验证身份，应用据此调用 `candis_bb` 或 `candis_gamepad`。描述符内容不会配置引脚
 或电源。`candis_gamepad_read()` 返回数字电平，去抖、正交码解码和摇杆轴校准由应用实现。
+
+## 摄像头
+
+综合测试板 OV5640 使用可选组件 `candis_camera`。应用初始化 `candis_camera_start()` 后，
+通过 `candis_camera_device()` 取得 V4L2 节点。停止流、解除帧缓冲映射并关闭节点后，调用
+`candis_camera_stop()` 释放 DVP、XCLK 和已持有的电源。示例的 800×600 RGB565 取流使用
+两个 MMAP 缓冲。按当前像素格式解释 RGB565 字节顺序，预览颜色需在相应应用上验收。

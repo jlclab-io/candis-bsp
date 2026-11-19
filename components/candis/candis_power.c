@@ -10,12 +10,25 @@
 #define TG28_REG_ENABLE 0x90
 #define TG28_ALDO1_VOLTAGE 0x92
 #define TG28_ALDO2_VOLTAGE 0x93
+#define TG28_ALDO3_VOLTAGE 0x94
+#define TG28_ALDO4_VOLTAGE 0x95
+#define TG28_BLDO1_VOLTAGE 0x96
 #define TG28_ALDO3_ENABLE 0x04
 #define TG28_VOLTAGE_MASK 0x1f
-#define TG28_VOLTAGE_3300 28 /* (3300 - 500) / 100 mV */
+#define TG28_VOLTAGE_CODE(mv) (((mv) - 500) / 100)
 #define TG28_TIMEOUT_MS 100
 
 static const char *TAG = "candis_power";
+static const struct {
+    uint8_t reg;
+    uint8_t code;
+} s_voltage[] = {
+    [CANDIS_RAIL_DISPLAY] = {TG28_ALDO1_VOLTAGE, TG28_VOLTAGE_CODE(3300)},
+    [CANDIS_RAIL_AUDIO] = {TG28_ALDO2_VOLTAGE, TG28_VOLTAGE_CODE(3300)},
+    [CANDIS_RAIL_FIXTURE_CAMERA_CORE] = {TG28_ALDO3_VOLTAGE, TG28_VOLTAGE_CODE(1500)},
+    [CANDIS_RAIL_FIXTURE_CAMERA_ANALOG] = {TG28_ALDO4_VOLTAGE, TG28_VOLTAGE_CODE(2800)},
+    [CANDIS_RAIL_FIXTURE_CAMERA_IO] = {TG28_BLDO1_VOLTAGE, TG28_VOLTAGE_CODE(2800)},
+};
 
 static esp_err_t read_reg(i2c_master_dev_handle_t pmu, uint8_t reg, uint8_t *value)
 {
@@ -45,22 +58,24 @@ esp_err_t candis_power_acquire(candis_power_t *lease, bool manage, unsigned sett
     ESP_RETURN_ON_ERROR(open_pmu(lease), TAG, "open TG28 device");
     uint8_t enabled;
     ESP_RETURN_ON_ERROR(read_reg(lease->pmu, TG28_REG_ENABLE, &enabled), TAG, "read rail state");
-    const uint8_t voltage_reg = lease->rail == CANDIS_RAIL_DISPLAY ? TG28_ALDO1_VOLTAGE :
-                                lease->rail == CANDIS_RAIL_AUDIO ? TG28_ALDO2_VOLTAGE : 0;
-    uint8_t voltage = TG28_VOLTAGE_3300;
+    const unsigned index = lease->rail;
+    const bool has_voltage = index < sizeof(s_voltage) / sizeof(s_voltage[0]);
+    const uint8_t voltage_reg = has_voltage ? s_voltage[index].reg : 0;
+    const uint8_t target = has_voltage ? s_voltage[index].code : 0;
+    uint8_t voltage = target;
     if (voltage_reg) {
         ESP_RETURN_ON_ERROR(read_reg(lease->pmu, voltage_reg, &voltage), TAG, "read rail voltage");
     }
     if (enabled & lease->rail) {
-        return (voltage & TG28_VOLTAGE_MASK) == TG28_VOLTAGE_3300 ? ESP_OK : ESP_ERR_INVALID_STATE;
+        return (voltage & TG28_VOLTAGE_MASK) == target ? ESP_OK : ESP_ERR_INVALID_STATE;
     }
     ESP_RETURN_ON_FALSE(manage, ESP_ERR_INVALID_STATE, TAG, "requested rail is off");
     ESP_RETURN_ON_FALSE(lease->rail != CANDIS_RAIL_EXPANSION || !(enabled & TG28_ALDO3_ENABLE),
                         ESP_ERR_INVALID_STATE, TAG, "DC1SW is off while ALDO3 is on");
-    if (voltage_reg && (voltage & TG28_VOLTAGE_MASK) != TG28_VOLTAGE_3300) {
+    if (voltage_reg && (voltage & TG28_VOLTAGE_MASK) != target) {
         lease->voltage_reg = voltage_reg;
         lease->original_voltage = voltage & TG28_VOLTAGE_MASK;
-        ESP_RETURN_ON_ERROR(update_reg(lease->pmu, voltage_reg, TG28_VOLTAGE_MASK, TG28_VOLTAGE_3300),
+        ESP_RETURN_ON_ERROR(update_reg(lease->pmu, voltage_reg, TG28_VOLTAGE_MASK, target),
                             TAG, "set rail voltage");
         vTaskDelay(pdMS_TO_TICKS(10) + 1);
     }
@@ -72,7 +87,7 @@ esp_err_t candis_power_acquire(candis_power_t *lease, bool manage, unsigned sett
     if (voltage_reg) {
         ESP_RETURN_ON_ERROR(read_reg(lease->pmu, voltage_reg, &voltage), TAG, "verify rail voltage");
     }
-    return (enabled & lease->rail) && (voltage & TG28_VOLTAGE_MASK) == TG28_VOLTAGE_3300
+    return (enabled & lease->rail) && (voltage & TG28_VOLTAGE_MASK) == target
            ? ESP_OK : ESP_ERR_INVALID_RESPONSE;
 }
 

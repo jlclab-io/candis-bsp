@@ -33,6 +33,7 @@ jobs:
           idf.py --preview -C examples/display build
           idf.py --preview -C examples/diagnostics -D 'SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.features' build
           idf.py --preview -C examples/expansion build
+          idf.py --preview -C examples/camera build
       - name: Test the EEPROM decoder
         run: |
           source "$RUNNER_TEMP/esp-idf/export.sh"

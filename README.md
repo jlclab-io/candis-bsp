@@ -6,7 +6,7 @@ BSP 组件 `candis` 面向 Candis 硬件修订 1.2，可独立于扩展板运行
 
 本仓库处于开发预览阶段。已集成共享主 I²C、ST7801N QSPI 显示、TE 同步、亮度、CST9220
 双触点读取、RX8130CE 日历读取和 TF 卡挂载。音频为可选功能。BB 和 Gamepad 作为独立组件，
-实板使用范围见硬件文档。相机、IMU 和整机低功耗仍需集成验证。
+综合测试板 OV5640 提供可选 DVP 组件。实板使用范围见硬件文档。IMU 和整机低功耗仍需集成验证。
 参见 [API 参考](docs/api.md) 和 [硬件与实测](docs/hardware.md)。
 
 ## 构建示例
@@ -19,6 +19,7 @@ BSP 组件 `candis` 面向 Candis 硬件修订 1.2，可独立于扩展板运行
 idf.py --preview -C examples/display build
 idf.py --preview -C examples/diagnostics build
 idf.py --preview -C examples/expansion build
+idf.py --preview -C examples/camera build
 ```
 
 示例开启 PSRAM，默认采用 50 MHz QSPI 和综合测试板 USB Serial/JTAG
