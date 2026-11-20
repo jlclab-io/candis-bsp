@@ -1,0 +1,10 @@
+cmake_minimum_required(VERSION 3.22)
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+# Exported examples place these two helpers in their local components directory.
+foreach(helper candis_example_usb candis_example_tf)
+    if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../common/${helper}/CMakeLists.txt")
+        list(APPEND EXTRA_COMPONENT_DIRS "${CMAKE_CURRENT_LIST_DIR}/../common/${helper}")
+    endif()
+endforeach()
+idf_build_set_property(MINIMAL_BUILD ON)
+project(candis_dock_demo)

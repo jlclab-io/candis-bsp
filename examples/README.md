@@ -22,6 +22,7 @@
 | [power](power/README.md) | 充电状态、VBAT、电源轨及可选受监督充电档位验证 | 01 电源、18 电池充电 |
 | [tg28](tg28/README.md) | 独立使用 TG28-ESP 组件读取 PMU 和充电遥测 | 04 PMU I²C、18 电池充电 |
 | [expansion](expansion) | 按底板身份运行 Dock TF 和模块探测，或 Gamepad 摇杆、按键和编码器 | 20 摇杆、21 TF、26 底板 EEPROM |
+| [dock](dock/README.md) | Dock v1.1/v1.2 识别、TF 读写、供电、AMOLED 负载与 CN3 声道调试 | 02 AMOLED、06 音频、18 电源、21 TF、26 底板 EEPROM |
 | [diagnostics](diagnostics) | 板级检查，另有音频、TF、USB CDC 回显配置 | 09 系统诊断、13 USB OTG CDC |
 
 ## TF 卡

@@ -68,8 +68,8 @@ class BaseboardTest(unittest.TestCase):
         return result, info
 
     def test_approved_hardware(self):
-        for code, board, revision, kind in ((0x30, 1, 0x100, 1), (0x31, 2, 0x102, 2)):
-            with self.subTest(code=code):
+        for code, board, revision, kind in ((0x30, 1, 0x100, 1), (0x31, 2, 0x101, 2), (0x31, 2, 0x102, 2)):
+            with self.subTest(code=code, revision=revision):
                 result, info = self.decode(descriptor(code, board, revision))
                 self.assertEqual(result, OK)
                 self.assertEqual((info.kind, info.revision, info.format), (kind, revision, 1))
@@ -86,6 +86,7 @@ class BaseboardTest(unittest.TestCase):
         self.assertEqual(self.decode(descriptor()[:-1])[0], INVALID_SIZE)
         self.assertEqual(self.decode(bytes(SIZE))[0], INVALID_RESPONSE)
         self.assertEqual(self.decode(descriptor(revision=0x101))[0], NOT_SUPPORTED)
+        self.assertEqual(self.decode(descriptor(0x31, 2, 0x103))[0], NOT_SUPPORTED)
         for offset in (0x08, 0x0A, 0x0D, 0x40):
             with self.subTest(offset=offset):
                 image = descriptor()

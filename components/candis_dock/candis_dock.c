@@ -1,6 +1,91 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-/* Candis Dock hardware revision 1.2. */
+/* Candis Dock hardware revisions 1.1 and 1.2. */
+#include <stdatomic.h>
 #include "bsp/candis_dock.h"
+#include "bsp/candis_power.h"
+
+static atomic_flag s_control = ATOMIC_FLAG_INIT;
+static bool s_power_lease;
+
+esp_err_t candis_dock_probe(candis_baseboard_info_t *identity)
+{
+    if (!identity) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    candis_baseboard_info_t result;
+    const esp_err_t err = candis_baseboard_probe(&result);
+    if (err != ESP_OK) {
+        return err;
+    }
+    if (result.kind != CANDIS_BASEBOARD_BB) {
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+    *identity = result;
+    return ESP_OK;
+}
+
+static esp_err_t release_power(void)
+{
+    if (!s_power_lease) {
+        return ESP_OK;
+    }
+    const esp_err_t err = candis_expansion_power_release();
+    if (err == ESP_OK) {
+        s_power_lease = false;
+    }
+    return err;
+}
+
+esp_err_t candis_dock_open(bool manage_power, candis_baseboard_info_t *identity)
+{
+    if (!identity) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (atomic_flag_test_and_set(&s_control)) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    esp_err_t err = ESP_ERR_INVALID_STATE;
+    if (!s_power_lease) {
+        s_power_lease = true; /* The BSP may retain a partial lease after an error. */
+        err = candis_expansion_power_acquire(manage_power);
+        if (err == ESP_OK) {
+            err = candis_dock_probe(identity);
+        }
+        if (err != ESP_OK) {
+            ESP_ERROR_CHECK_WITHOUT_ABORT(release_power());
+        }
+    }
+    atomic_flag_clear(&s_control);
+    return err;
+}
+
+esp_err_t candis_dock_close(void)
+{
+    if (atomic_flag_test_and_set(&s_control)) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    const esp_err_t err = release_power();
+    atomic_flag_clear(&s_control);
+    return err;
+}
+
+esp_err_t candis_dock_get_speaker_channel(const candis_baseboard_info_t *identity,
+                                         candis_dock_speaker_channel_t *channel)
+{
+    if (!identity || identity->kind != CANDIS_BASEBOARD_BB || !channel) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    switch (identity->hardware_revision) {
+    case 0x0101:
+        *channel = CANDIS_DOCK_SPEAKER_LEFT;
+        return ESP_OK;
+    case 0x0102:
+        *channel = CANDIS_DOCK_SPEAKER_RIGHT;
+        return ESP_OK;
+    default:
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+}
 
 esp_err_t candis_dock_mount(const candis_baseboard_info_t *identity, const char *path, sdmmc_card_t **card)
 {

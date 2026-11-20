@@ -47,7 +47,7 @@ esp_err_t candis_baseboard_decode(const uint8_t *image, size_t length, candis_ba
     candis_baseboard_kind_t kind;
     if (image[3] == 0x30 && board == 1 && revision == 0x0100) {
         kind = CANDIS_BASEBOARD_GAMEPAD;
-    } else if (image[3] == 0x31 && board == 2 && revision == 0x0102) {
+    } else if (image[3] == 0x31 && board == 2 && (revision == 0x0101 || revision == 0x0102)) {
         kind = CANDIS_BASEBOARD_BB;
     } else {
         return ESP_ERR_NOT_SUPPORTED;

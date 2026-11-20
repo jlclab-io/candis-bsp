@@ -1,0 +1,5 @@
+dependencies:
+  candis_dock:
+    path: ../../../components/candis_dock
+  tg28-esp:
+    path: ../../../components/tg28-esp

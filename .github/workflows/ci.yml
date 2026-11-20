@@ -77,6 +77,7 @@ jobs:
           idf.py --preview -C examples/expansion -B "$RUNNER_TEMP/dock-tf-build" \
             -D "SDKCONFIG=$RUNNER_TEMP/dock-tf.sdkconfig" \
             -D 'SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.tf_test;sdkconfig.modules' build
+          idf.py --preview -C examples/dock build
           idf.py --preview -C examples/camera build
           idf.py --preview -C examples/camera -B "$RUNNER_TEMP/camera-jpeg-build" \
             -D "SDKCONFIG=$RUNNER_TEMP/camera-jpeg.sdkconfig" \
