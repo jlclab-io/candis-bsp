@@ -1,13 +1,13 @@
 /* SPDX-License-Identifier: Apache-2.0 */
+#include "candis_example_usb.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include "bsp/candis_rtc.h"
-#include "driver/usb_serial_jtag.h"
-#include "driver/usb_serial_jtag_vfs.h"
-#include "freertos/FreeRTOS.h"
 
 esp_err_t candis_rtc_example_sleep(void);
 void candis_rtc_example_resume(void);
@@ -33,7 +33,13 @@ static void handle_command(const char *command)
         return;
     }
     if (strcmp(command, "SLEEP") == 0) {
-        printf("RTC_SLEEP %s\n", esp_err_to_name(candis_rtc_example_sleep()));
+        if (!candis_example_usb_begin_operation()) {
+            puts("RTC_SLEEP USB download in progress");
+            return;
+        }
+        const esp_err_t result = candis_rtc_example_sleep();
+        candis_example_usb_end_operation();
+        printf("RTC_SLEEP %s\n", esp_err_to_name(result));
         return;
     }
     if (strcmp(command, "WAKE") == 0) {
@@ -68,10 +74,8 @@ static void handle_command(const char *command)
 
 void app_main(void)
 {
+    ESP_ERROR_CHECK_WITHOUT_ABORT(candis_example_usb_start(CANDIS_EXAMPLE_USB_CONSOLE, true));
     candis_rtc_example_resume();
-    usb_serial_jtag_driver_config_t config = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(usb_serial_jtag_driver_install(&config));
-    usb_serial_jtag_vfs_use_driver();
     puts("RTC_READY commands=READ,SET,RECOVER,SLEEP,WAKE utc=epoch_seconds");
     report_time();
     char line[48];
@@ -79,7 +83,8 @@ void app_main(void)
     bool overflow = false;
     for (;;) {
         char next;
-        if (usb_serial_jtag_read_bytes(&next, 1, portMAX_DELAY) != 1) {
+        if (!candis_example_usb_read(&next)) {
+            vTaskDelay(pdMS_TO_TICKS(10));
             continue;
         }
         if (next == '\n' || next == '\r') {

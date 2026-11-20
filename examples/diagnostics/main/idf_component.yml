@@ -1,7 +1,3 @@
 dependencies:
   candis:
     path: ../../../components/candis
-  espressif/esp_tinyusb:
-    version: "3.0.0"
-    rules:
-      - if: $CONFIG{CANDIS_DIAGNOSTICS_OTG} == True

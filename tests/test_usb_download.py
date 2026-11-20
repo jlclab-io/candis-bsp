@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 
-HEADERS = Path(__file__).resolve().parents[1] / 'examples/diagnostics/main'
+HEADERS = Path(__file__).resolve().parents[1] / 'examples/common/candis_example_usb'
 
 TEST_SOURCE = """
 #include <assert.h>

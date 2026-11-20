@@ -1,6 +1,7 @@
 version: "0.1.0"
 description: Candis gamepad expansion support
 license: Apache-2.0
+url: https://github.com/jlclab-io/candis-bsp/tree/main/components/candis_gamepad
 repository: https://github.com/jlclab-io/candis-bsp.git
 repository_info:
   path: components/candis_gamepad

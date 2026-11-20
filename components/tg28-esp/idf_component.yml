@@ -1,0 +1,11 @@
+version: "0.1.0"
+description: TG28-ESP power-management IC driver for ESP-IDF
+license: Apache-2.0
+url: https://github.com/jlclab-io/candis-bsp/tree/main/components/tg28-esp
+repository: https://github.com/jlclab-io/candis-bsp.git
+repository_info:
+  path: components/tg28-esp
+tags:
+  - pmic
+dependencies:
+  idf: ">=6.2,<6.3"

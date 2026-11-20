@@ -1,0 +1,16 @@
+menu "Candis example USB"
+
+config CANDIS_EXAMPLE_USB_CDC
+    bool "Enable native OTG CDC on the Candis USB-C connector"
+    default y
+    select TINYUSB_CDC_ENABLED
+    help
+        Start the native USB device and mirror application output to CDC.
+        Disable for USB-free power measurements or non-Candis host setups.
+
+config CANDIS_EXAMPLE_USB_DOWNLOAD
+    bool "Recognize the full DTR/RTS sequence for app-only download"
+    depends on CANDIS_EXAMPLE_USB_CDC
+    default y
+
+endmenu

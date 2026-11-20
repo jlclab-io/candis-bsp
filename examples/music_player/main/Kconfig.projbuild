@@ -1,0 +1,15 @@
+menu "Candis music player"
+
+config CANDIS_MUSIC_PLAYER_MANAGE_PANEL_POWER
+    bool "Allow the player to enable ALDO1"
+    default n
+    help
+        Enable on a characterized fixture compatible with a nominal 3.3 V ALDO1.
+
+config CANDIS_MUSIC_PLAYER_MANAGE_AUDIO_POWER
+    bool "Allow the player to enable ALDO2 during playback"
+    default n
+    help
+        Enable on the audio fixture with the board's speaker connections.
+
+endmenu

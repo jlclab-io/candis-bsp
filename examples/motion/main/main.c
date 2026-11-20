@@ -1,9 +1,12 @@
 /* SPDX-License-Identifier: Apache-2.0 */
+#include "candis_example_usb.h"
 #include <math.h>
+#include <inttypes.h>
 #include "bsp/candis_imu.h"
 #include "bsp/candis_power.h"
 #include "bsp/candis_storage.h"
 #include "esp_check.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "sdkconfig.h"
@@ -14,11 +17,15 @@ static esp_err_t read_samples(void)
 {
     vTaskDelay(pdMS_TO_TICKS(100));
     int64_t previous = 0;
+    uint32_t previous_ticks = 0;
     for (unsigned index = 0; index < 8; ++index) {
         candis_imu_sample_t sample;
+        const int64_t read_start = esp_timer_get_time();
         ESP_RETURN_ON_ERROR(candis_imu_read(&sample), TAG, "read six-axis sample");
         ESP_RETURN_ON_FALSE(sample.timestamp_us > previous, ESP_ERR_INVALID_RESPONSE, TAG, "sample timestamp");
         previous = sample.timestamp_us;
+        const uint32_t elapsed_ticks = (sample.sensor_ticks - previous_ticks) & 0xffffff;
+        previous_ticks = sample.sensor_ticks;
         const float *a = sample.acceleration_g;
         const float *g = sample.angular_velocity_dps;
         for (unsigned axis = 0; axis < 3; ++axis) {
@@ -27,8 +34,20 @@ static esp_err_t read_samples(void)
                                 ESP_ERR_INVALID_RESPONSE, TAG, "sample range");
         }
         ESP_RETURN_ON_FALSE(a[0] || a[1] || a[2], ESP_ERR_INVALID_RESPONSE, TAG, "zero acceleration");
-        ESP_LOGI(TAG, "acc=(%.3f,%.3f,%.3f) g gyro=(%.3f,%.3f,%.3f) dps", a[0], a[1], a[2], g[0], g[1], g[2]);
+        ESP_LOGI(TAG, "acc=(%.3f,%.3f,%.3f) g gyro=(%.3f,%.3f,%.3f) dps "
+                      "sensor_ticks=%" PRIu32 " delta_ticks=%" PRIu32 " read_us=%" PRId64,
+                 a[0], a[1], a[2], g[0], g[1], g[2], sample.sensor_ticks,
+                 index ? elapsed_ticks : 0, sample.timestamp_us - read_start);
         vTaskDelay(pdMS_TO_TICKS(20));
+    }
+    float celsius;
+    const esp_err_t temperature = candis_imu_read_temperature(&celsius);
+    if (temperature == ESP_OK) {
+        ESP_LOGI(TAG, "BMI270 die temperature %.2f C", celsius);
+    } else if (temperature == ESP_ERR_NOT_FINISHED) {
+        ESP_LOGI(TAG, "BMI270 temperature conversion pending");
+    } else {
+        return temperature;
     }
     return ESP_OK;
 }
@@ -105,6 +124,7 @@ static esp_err_t run_motion_test(bool manage)
 
 void app_main(void)
 {
+    ESP_ERROR_CHECK_WITHOUT_ABORT(candis_example_usb_start(CANDIS_EXAMPLE_USB_CONSOLE, true));
 #ifdef CONFIG_CANDIS_MOTION_MANAGE_POWER
     const bool manage = true;
 #else

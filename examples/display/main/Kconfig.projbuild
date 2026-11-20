@@ -6,26 +6,24 @@ config CANDIS_BENCH_PANEL_POWER
     help
         Enable for a measured setup compatible with a nominal 3.3 V ALDO1.
 
-config CANDIS_BENCH_QSPI_80MHZ
-    bool "Use the Bring-Up 80 MHz QSPI setting"
+config CANDIS_BENCH_QSPI_50MHZ
+    bool "Use 50 MHz QSPI for comparison"
     default n
-    help
-        Use on the characterized setup for comparison with Bring-Up.
 
 config CANDIS_BENCH_AUTORUN
-    bool "Automatically measure partial/full refresh and restart the display"
+    bool "Automatically measure partial, full and scan refresh and restart the display"
     default n
 
 config CANDIS_BENCH_ROUNDS
-    int "Partial/full refresh and restart cycles"
+    int "Refresh benchmark and restart cycles"
     depends on CANDIS_BENCH_AUTORUN
     range 1 100
     default 1
 
-config CANDIS_BENCH_ASYNC_FLUSH
-    bool "Overlap LVGL and AMOLED transfers"
+config CANDIS_BENCH_SYNC_FLUSH
+    bool "Use synchronous AMOLED transfers for comparison"
     default n
     help
-        Use an additional PSRAM framebuffer for the comparison.
+        Use one PSRAM framebuffer and wait for panel IO inside the LVGL refresh.
 
 endmenu

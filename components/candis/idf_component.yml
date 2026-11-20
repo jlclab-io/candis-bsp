@@ -11,6 +11,8 @@ tags:
   - bsp
 dependencies:
   idf: ">=6.2,<6.3"
+  tg28-esp:
+    path: ../tg28-esp
   espressif/esp_lcd_touch_cst9220: "0.1.2"
   espressif/esp_lvgl_port: "2.9.0"
   lvgl/lvgl:

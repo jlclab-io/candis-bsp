@@ -6,6 +6,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #include "bsp/candis_camera.h"
+#include "candis_camera_sensor.h"
 #include "esp_check.h"
 #include "esp_video_ioctl.h"
 
@@ -28,6 +29,9 @@ static esp_err_t video_ioctl(unsigned long command, void *arg, const char *opera
         return ESP_OK;
     }
     const int error = errno;
+    if (command == VIDIOC_ENUM_FMT && error == EINVAL) {
+        return ESP_ERR_NOT_FOUND;
+    }
     ESP_LOGE(TAG, "%s: errno=%d", operation, error);
     switch (error) {
     case ETIMEDOUT: return ESP_ERR_TIMEOUT;
@@ -35,6 +39,7 @@ static esp_err_t video_ioctl(unsigned long command, void *arg, const char *opera
     case EBUSY: return ESP_ERR_INVALID_STATE;
     case EINVAL: return ESP_ERR_INVALID_ARG;
     case ENODEV: return ESP_ERR_NOT_FOUND;
+    case ENOTTY:
     case ESRCH: return ESP_ERR_NOT_SUPPORTED;
     default: return ESP_FAIL;
     }
@@ -62,6 +67,24 @@ esp_err_t candis_camera_get_mode(uint32_t index, esp_cam_sensor_format_t *mode)
         *mode = request.format;
     }
     return err == ESP_OK ? cleanup : err;
+}
+
+esp_err_t candis_camera_get_pixel_format(uint32_t index, struct v4l2_fmtdesc *format)
+{
+    if (!format) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    ESP_RETURN_ON_ERROR(open_device(), TAG, "open camera for pixel format enumeration");
+    struct v4l2_fmtdesc request = {.type = CAPTURE, .index = index};
+    const esp_err_t err = video_ioctl(VIDIOC_ENUM_FMT, &request, "enumerate pixel format");
+    const esp_err_t cleanup = candis_camera_stream_stop();
+    if (cleanup != ESP_OK) {
+        return cleanup;
+    }
+    if (err == ESP_OK) {
+        *format = request;
+    }
+    return err;
 }
 
 static esp_err_t start_stream(const candis_camera_stream_config_t *config, struct v4l2_pix_format *format)
@@ -121,6 +144,79 @@ esp_err_t candis_camera_stream_start(const candis_camera_stream_config_t *config
     return err;
 }
 
+static esp_err_t sensor_control(unsigned long request, uint32_t control_class,
+                                struct v4l2_ext_control *control, const char *operation)
+{
+    if (!s_streaming || s_borrowed) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    struct v4l2_ext_controls controls = {
+        .ctrl_class = control_class,
+        .count = 1,
+        .controls = control,
+    };
+    return video_ioctl(request, &controls, operation);
+}
+
+esp_err_t candis_camera_sensor_read_register(uint16_t address, uint8_t *value)
+{
+    esp_cam_sensor_reg_val_t reg = {.regaddr = address};
+    struct v4l2_ext_control control = {
+        .id = ESP_CAM_SENSOR_IOC_G_REG, .p_u8 = (uint8_t *)&reg, .size = sizeof(reg),
+    };
+    const esp_err_t err = sensor_control(VIDIOC_G_EXT_CTRLS, V4L2_CTRL_CLASS_ESP_CAM_IOCTL,
+                                         &control, "read sensor register");
+    if (err == ESP_OK) {
+        *value = reg.value;
+    }
+    return err;
+}
+
+esp_err_t candis_camera_sensor_write_register(uint16_t address, uint8_t value)
+{
+    esp_cam_sensor_reg_val_t reg = {.regaddr = address, .value = value};
+    struct v4l2_ext_control control = {
+        .id = ESP_CAM_SENSOR_IOC_S_REG, .p_u8 = (uint8_t *)&reg, .size = sizeof(reg),
+    };
+    return sensor_control(VIDIOC_S_EXT_CTRLS, V4L2_CTRL_CLASS_ESP_CAM_IOCTL,
+                          &control, "write sensor register");
+}
+
+esp_err_t candis_camera_read_sensor_id(esp_cam_sensor_id_t *id)
+{
+    if (!id) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    esp_cam_sensor_id_t value = {0};
+    struct v4l2_ext_control control = {
+        .id = ESP_CAM_SENSOR_IOC_G_CHIP_ID, .p_u8 = (uint8_t *)&value, .size = sizeof(value),
+    };
+    esp_err_t err = sensor_control(VIDIOC_G_EXT_CTRLS, V4L2_CTRL_CLASS_ESP_CAM_IOCTL, &control, "read sensor ID");
+    if (err == ESP_OK) {
+        *id = value;
+    }
+    return err;
+}
+
+esp_err_t candis_camera_set_flip(bool horizontal, bool enabled)
+{
+    ESP_RETURN_ON_ERROR(candis_ov5640_end_pending_group(), TAG, "recover sensor group");
+    struct v4l2_ext_control control = {
+        .id = horizontal ? V4L2_CID_HFLIP : V4L2_CID_VFLIP, .value = enabled,
+    };
+    return sensor_control(VIDIOC_S_EXT_CTRLS, V4L2_CTRL_CLASS_USER, &control, "set sensor flip");
+}
+
+esp_err_t candis_camera_set_test_pattern(bool enabled)
+{
+    ESP_RETURN_ON_ERROR(candis_ov5640_end_pending_group(), TAG, "recover sensor group");
+    int pattern = enabled;
+    struct v4l2_ext_control control = {
+        .id = ESP_CAM_SENSOR_IOC_S_TEST_PATTERN, .p_u8 = (uint8_t *)&pattern, .size = sizeof(pattern),
+    };
+    return sensor_control(VIDIOC_S_EXT_CTRLS, V4L2_CTRL_CLASS_ESP_CAM_IOCTL, &control, "set test pattern");
+}
+
 esp_err_t candis_camera_frame_acquire(candis_camera_frame_t *frame)
 {
     if (!frame) {
@@ -129,10 +225,16 @@ esp_err_t candis_camera_frame_acquire(candis_camera_frame_t *frame)
     if (!s_streaming || s_borrowed) {
         return ESP_ERR_INVALID_STATE;
     }
+    ESP_RETURN_ON_ERROR(candis_ov5640_end_pending_group(), TAG, "recover sensor group");
     s_frame = (struct v4l2_buffer) {.type = CAPTURE, .memory = V4L2_MEMORY_MMAP};
     ESP_RETURN_ON_ERROR(video_ioctl(VIDIOC_DQBUF, &s_frame, "dequeue frame"), TAG, "capture frame");
     s_borrowed = true;
-    if (s_frame.index >= BUFFER_COUNT || s_frame.bytesused > s_buffers[s_frame.index].length) {
+    if (s_frame.index >= BUFFER_COUNT) {
+        /* An invalid index cannot be sent back to QBUF. Stop to reclaim the buffers. */
+        ESP_ERROR_CHECK_WITHOUT_ABORT(candis_camera_stream_stop());
+        return ESP_ERR_INVALID_RESPONSE;
+    }
+    if (s_frame.bytesused > s_buffers[s_frame.index].length) {
         ESP_ERROR_CHECK_WITHOUT_ABORT(candis_camera_frame_release());
         return ESP_ERR_INVALID_RESPONSE;
     }
@@ -186,6 +288,7 @@ esp_err_t candis_camera_stream_stop(void)
     }
     if (s_streaming) {
         enum v4l2_buf_type type = CAPTURE;
+        ESP_RETURN_ON_ERROR(candis_ov5640_end_pending_group(), TAG, "recover sensor group before stopping");
         ESP_RETURN_ON_ERROR(video_ioctl(VIDIOC_STREAMOFF, &type, "stop capture"), TAG, "stop DVP stream");
         s_streaming = false;
         s_borrowed = false;

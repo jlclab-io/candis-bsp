@@ -1,0 +1,11 @@
+menu "Candis BLE scan example"
+
+config CANDIS_BLE_SCAN_PEER_UUID
+    string "Optional peer's 128-bit Service Data UUID"
+    default ""
+    help
+        Enter a canonical UUID such as 01234567-89ab-cdef-0123-456789abcdef.
+        The scanner counts advertisements containing Service Data with this
+        UUID and reports their strongest RSSI alongside the overall count.
+
+endmenu

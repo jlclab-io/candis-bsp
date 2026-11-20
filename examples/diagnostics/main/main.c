@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0 */
+#include "candis_example_usb.h"
 #include <inttypes.h>
 #include "bsp/candis_rtc.h"
 #include "bsp/candis_storage.h"
@@ -14,9 +15,6 @@
 
 static const char *TAG = "candis_diagnostics";
 
-#ifdef CONFIG_CANDIS_DIAGNOSTICS_OTG
-esp_err_t candis_diagnostics_start_otg(void);
-#endif
 #ifdef CONFIG_CANDIS_DIAGNOSTICS_AUDIO
 esp_err_t candis_diagnostics_audio(void);
 #endif
@@ -70,6 +68,9 @@ static void inspect_card(void)
 
 void app_main(void)
 {
+#ifndef CONFIG_CANDIS_DIAGNOSTICS_OTG
+    ESP_ERROR_CHECK_WITHOUT_ABORT(candis_example_usb_start(CANDIS_EXAMPLE_USB_CONSOLE, true));
+#endif
     struct tm utc;
     esp_err_t err = candis_rtc_get_time(&utc);
     if (err == ESP_OK) {
@@ -85,6 +86,11 @@ void app_main(void)
     ESP_ERROR_CHECK_WITHOUT_ABORT(candis_diagnostics_audio());
 #endif
 #ifdef CONFIG_CANDIS_DIAGNOSTICS_OTG
-    ESP_ERROR_CHECK(candis_diagnostics_start_otg());
+#ifdef CONFIG_CANDIS_DIAGNOSTICS_OTG_DOWNLOAD
+    const bool allow_download = true;
+#else
+    const bool allow_download = false;
+#endif
+    ESP_ERROR_CHECK_WITHOUT_ABORT(candis_example_usb_start(CANDIS_EXAMPLE_USB_ECHO, allow_download));
 #endif
 }

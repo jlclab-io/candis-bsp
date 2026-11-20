@@ -19,10 +19,20 @@ typedef struct {
 /** Snapshot board rails. This call does not write the PMU. */
 esp_err_t candis_power_read(candis_power_state_t *state);
 
+/** Acquire one application-owned reference to DC1SW.
+ * Set manage_power only when the attached loads are known. If acquisition fails,
+ * call release to retry any pending rollback before trying again.
+ */
+esp_err_t candis_expansion_power_acquire(bool manage_power);
+
+/** Release the application reference after its peripherals are idle. Retry on failure. */
+esp_err_t candis_expansion_power_release(void);
+
 typedef enum {
     CANDIS_EXPANSION_ALDO3,
     CANDIS_EXPANSION_ALDO4,
     CANDIS_EXPANSION_BLDO1,
+    CANDIS_EXPANSION_BLDO2,
 } candis_expansion_ldo_t;
 
 typedef struct candis_expansion_ldo_lease *candis_expansion_ldo_handle_t;

@@ -13,6 +13,7 @@ typedef struct {
     float acceleration_g[3];
     float angular_velocity_dps[3];
     int64_t timestamp_us;
+    uint32_t sensor_ticks; /**< BMI270 counter at burst read, modulo 2^24, 39.0625 us per tick. */
 } candis_imu_sample_t;
 
 /** Start the BMI270 at 100 Hz, ±4 g and ±1000 dps using I2C 0x68.
@@ -22,8 +23,14 @@ typedef struct {
  */
 esp_err_t candis_imu_start(bool manage_power);
 
-/** Read acceleration and angular velocity in sensor axes, with an ESP timer timestamp. */
+/** Read shadowed acceleration, angular velocity and sensor time in one I2C burst.
+ * timestamp_us is the host time at read completion. sensor_ticks is the device
+ * counter sampled with the burst. Output is set only on success.
+ */
 esp_err_t candis_imu_read(candis_imu_sample_t *sample);
+
+/** Read the BMI270 die temperature in °C. ESP_ERR_NOT_FINISHED means the first conversion is pending. */
+esp_err_t candis_imu_read_temperature(float *celsius);
 
 /** Stop measurements and release this client’s DC1SW lease. */
 esp_err_t candis_imu_stop(void);

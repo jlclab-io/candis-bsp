@@ -57,6 +57,11 @@ const char *candis_camera_device(void);
 /** Enumerate compiled sensor modes starting at index zero, with capture stopped. */
 esp_err_t candis_camera_get_mode(uint32_t index, esp_cam_sensor_format_t *mode);
 
+/** Enumerate DVP output formats for the active sensor mode, with capture stopped.
+ * Indexes start at zero. ESP_ERR_NOT_FOUND signals the end of the list.
+ */
+esp_err_t candis_camera_get_pixel_format(uint32_t index, struct v4l2_fmtdesc *format);
+
 typedef struct {
     const esp_cam_sensor_format_t *mode; /**< Optional expected mode from get_mode(). OV5640 selects its active mode in Kconfig. */
     uint32_t pixel_format;              /**< V4L2 fourcc. Zero keeps the current format. */
@@ -75,6 +80,12 @@ typedef struct {
  * Call all capture APIs from the same control task.
  */
 esp_err_t candis_camera_stream_start(const candis_camera_stream_config_t *config, struct v4l2_pix_format *format);
+/** Read the sensor identification through an active capture session. */
+esp_err_t candis_camera_read_sensor_id(esp_cam_sensor_id_t *id);
+/** Set one sensor orientation control between frames. */
+esp_err_t candis_camera_set_flip(bool horizontal, bool enabled);
+/** Toggle the sensor's diagnostic pattern between frames. */
+esp_err_t candis_camera_set_test_pattern(bool enabled);
 /** Borrow one frame until frame_release() or stream_stop(). Only one frame may be borrowed. */
 esp_err_t candis_camera_frame_acquire(candis_camera_frame_t *frame);
 esp_err_t candis_camera_frame_release(void);

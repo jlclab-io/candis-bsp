@@ -3,6 +3,8 @@ dependencies:
     dependencies:
     - name: idf
       version: '>=6.2,<6.3'
+    - name: tg28-esp
+      path: ../tg28-esp
     - name: espressif/esp_lcd_touch_cst9220
       version: 0.1.2
     - name: espressif/esp_lvgl_port
@@ -135,9 +137,17 @@ dependencies:
       registry_url: https://components.espressif.com/
       type: service
     version: 9.6.0~1
+  tg28-esp:
+    dependencies:
+    - name: idf
+      version: '>=6.2,<6.3'
+    source:
+      path: ../../components/tg28-esp
+      type: local
+    version: 0.1.0
 direct_dependencies:
 - candis
 - espressif/esp_tinyusb
-manifest_hash: 92453a1d714db8f2369c86dc548a6f8eb254be3cf88d2051a9ae0d8e490fc783
+manifest_hash: 0d3149d526cc2f0652d05434e1860d38b1ae857434435e164ef79f89cff7efb7
 target: esp32s31
 version: 3.0.0

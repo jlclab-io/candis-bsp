@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0 */
+#include "candis_example_usb.h"
 #include <stdio.h>
 #include <string.h>
 #include "bsp/candis.h"
@@ -168,9 +169,13 @@ esp_err_t candis_rtc_example_sleep(void)
     if (result == ESP_OK) {
         result = esp_sleep_enable_timer_wakeup(GUARD_US);
     }
-    if (result == ESP_OK) {
+    const bool detach_usb = result == ESP_OK;
+    if (detach_usb) {
         puts("RTC_SLEEP_ARMED gpio=0 guard_ms=5000");
         fflush(stdout);
+        result = candis_example_usb_stop();
+    }
+    if (result == ESP_OK) {
         result = candis_rtc_arm_update_irq(&s_saved.rtc);
     }
     if (result == ESP_OK) {
@@ -182,5 +187,8 @@ esp_err_t candis_rtc_example_sleep(void)
         ESP_ERROR_CHECK_WITHOUT_ABORT(timer);
     }
     esp_err_t restore = restore_wake_sources(NULL);
+    if (detach_usb) {
+        ESP_ERROR_CHECK_WITHOUT_ABORT(candis_example_usb_start(CANDIS_EXAMPLE_USB_CONSOLE, true));
+    }
     return restore == ESP_OK ? result : restore;
 }

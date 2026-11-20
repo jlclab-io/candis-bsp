@@ -6,8 +6,49 @@ config CANDIS_CAMERA_MANAGE_PANEL_POWER
     help
         Enable for a measured setup compatible with a nominal 3.3 V ALDO1.
 
-config CANDIS_CAMERA_QSPI_80MHZ
-    bool "Use the characterized 80 MHz QSPI setting"
+config CANDIS_CAMERA_QSPI_50MHZ
+    bool "Use 50 MHz QSPI for comparison"
     default n
+
+config CANDIS_CAMERA_STILL
+    bool "Capture and display a single still frame"
+    default n
+
+config CANDIS_CAMERA_SAVE_JPEG
+    bool "Save the still frame as a JPEG on the fixture TF card"
+    depends on CANDIS_CAMERA_STILL
+    default n
+    help
+        For the Candis validation fixture. After releasing the camera,
+        allow the storage driver to enable DC1SW and create a new JPEG.
+
+config CANDIS_CAMERA_TEST_PATTERN
+    bool "Use the OV5640 sensor test pattern"
+    default n
+
+config CANDIS_CAMERA_YUYV_RGB565
+    bool "Convert OV5640 YUYV to RGB565 with the DVP peripheral"
+    depends on CAMERA_OV5640_DVP_DEFAULT_FMT_YUV422_YUYV_800X600_10FPS
+    default n
+    help
+        Requires ESP Video to advertise RGB565X for the active YUYV
+        sensor mode. Applies the documented converter output byte order.
+
+config CANDIS_CAMERA_MANUAL_CONTROLS
+    bool "Verify and preview manual OV5640 exposure, gain, white balance and ISP settings"
+    depends on !CANDIS_CAMERA_TEST_PATTERN
+    default n
+    help
+        Apply exposure of one quarter of the active frame length,
+        2x analog gain, unity white-balance gains and a luma adjustment.
+        Verify register readback before preview or still capture.
+
+config CANDIS_CAMERA_CONTROL_CONSOLE
+    bool "Accept OV5640 tuning commands during live preview"
+    depends on ESP_CONSOLE_USB_SERIAL_JTAG && !CANDIS_CAMERA_STILL && !CANDIS_CAMERA_TEST_PATTERN
+    default n
+    help
+        Read short commands from USB Serial/JTAG between frames without
+        blocking the capture task on console input.
 
 endmenu

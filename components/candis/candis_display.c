@@ -26,6 +26,7 @@ static atomic_bool s_port_ready;
 static atomic_bool s_active;
 static atomic_bool s_raw_active;
 static atomic_uint s_te_edges;
+static atomic_bool s_touch_pending;
 static portMUX_TYPE s_stats_lock = portMUX_INITIALIZER_UNLOCKED;
 static struct {
     candis_power_t power;
@@ -54,6 +55,7 @@ static struct {
     bool submitted_failed;
     bool panel_stopping;
     uint8_t point_count;
+    uint8_t touch_read_failures;
     bool dirty_valid;
     bool sync_to_te;
     bool dma_pending;
@@ -359,24 +361,49 @@ static void flush_display(lv_display_t *display, const lv_area_t *area, uint8_t 
     lv_display_flush_ready(display);
 }
 
+static void IRAM_ATTR touch_ready(esp_lcd_touch_handle_t touch)
+{
+    (void)touch;
+    atomic_store_explicit(&s_touch_pending, true, memory_order_relaxed);
+}
+
+static void read_touch_report(void)
+{
+    /* A polled empty HYN212 frame is also decoded as zero contacts. Consume
+     * reports only when INT announces data so an idle hold keeps its state. */
+    if (!atomic_exchange_explicit(&s_touch_pending, false, memory_order_relaxed) &&
+        gpio_get_level(CANDIS_TOUCH_INT)) {
+        return;
+    }
+    esp_err_t err = esp_lcd_touch_read_data(s_display.touch);
+    if (err == ESP_ERR_NOT_FINISHED) {
+        return;
+    }
+    esp_lcd_touch_point_data_t points[TOUCH_POINTS];
+    uint8_t count = 0;
+    if (err == ESP_OK) {
+        err = esp_lcd_touch_get_data(s_display.touch, points, &count, TOUCH_POINTS);
+    }
+    if (err != ESP_OK) {
+        ++s_display.stats.touch_errors;
+        if (++s_display.touch_read_failures < 3) {
+            atomic_store_explicit(&s_touch_pending, true, memory_order_relaxed);
+        } else {
+            s_display.point_count = 0;
+            s_display.touch_read_failures = 0;
+        }
+        return;
+    }
+    s_display.touch_read_failures = 0;
+    for (uint8_t i = 0; i < count; ++i) {
+        s_display.points[i] = (candis_touch_point_t){points[i].x, points[i].y, points[i].track_id};
+    }
+    s_display.point_count = count;
+}
+
 static void read_touch(lv_indev_t *input, lv_indev_data_t *data)
 {
-    esp_err_t err = esp_lcd_touch_read_data(s_display.touch);
-    if (err != ESP_ERR_NOT_FINISHED) {
-        esp_lcd_touch_point_data_t points[TOUCH_POINTS];
-        uint8_t count = 0;
-        if (err == ESP_OK) {
-            err = esp_lcd_touch_get_data(s_display.touch, points, &count, TOUCH_POINTS);
-        }
-        if (err != ESP_OK) {
-            ++s_display.stats.touch_errors;
-            count = 0;
-        }
-        for (uint8_t i = 0; i < count; ++i) {
-            s_display.points[i] = (candis_touch_point_t){points[i].x, points[i].y, points[i].track_id};
-        }
-        s_display.point_count = count;
-    }
+    read_touch_report();
     data->state = s_display.point_count ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
     data->point = (lv_point_t){s_display.points[0].x, s_display.points[0].y};
 }
@@ -390,8 +417,11 @@ static esp_err_t touch_init(void)
     const esp_lcd_touch_config_t config = {
         .x_max = BSP_LCD_H_RES, .y_max = BSP_LCD_V_RES,
         .rst_gpio_num = CANDIS_TOUCH_RESET, .int_gpio_num = CANDIS_TOUCH_INT,
+        .levels.interrupt = 0,
         .flags.mirror_x = true, .flags.mirror_y = true,
+        .interrupt_callback = touch_ready,
     };
+    atomic_store_explicit(&s_touch_pending, false, memory_order_relaxed);
     return esp_lcd_touch_new_i2c_cst9220(s_display.touch_io, &config, &s_display.touch);
 }
 

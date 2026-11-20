@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Stage one extension with a Registry dependency on the corresponding Candis BSP."""
+"""Stage a Candis component with its monorepo dependency resolved through the Registry."""
 
 import argparse
 from pathlib import Path
@@ -10,13 +10,17 @@ import shutil
 import yaml
 
 
-EXTENSIONS = ("candis_dock", "candis_gamepad")
+LOCAL_DEPENDENCIES = {
+    "candis": "tg28-esp",
+    "candis_dock": "candis",
+    "candis_gamepad": "candis",
+}
 COMPONENTS = Path(__file__).resolve().parents[1] / "components"
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("component", choices=EXTENSIONS)
+    parser.add_argument("component", choices=LOCAL_DEPENDENCIES)
     parser.add_argument("destination", type=Path, help="new staging directory")
     parser.add_argument("--namespace", required=True)
     args = parser.parse_args()
@@ -29,15 +33,16 @@ def main():
         parser.error("stage the component outside its source directory")
 
     manifest_file = "idf_component.yml"
-    main_manifest = yaml.safe_load((COMPONENTS / "candis" / manifest_file).read_text())
     manifest = yaml.safe_load((source / manifest_file).read_text())
     dependencies = manifest["dependencies"]
-    candis = dependencies.pop("candis")
-    if candis.pop("path") != "../candis":
-        parser.error("expected the local Candis BSP path")
-    dependencies[f"{args.namespace}/candis"] = {
-        "version": f"=={main_manifest['version']}",
-        **candis,
+    dependency_name = LOCAL_DEPENDENCIES[args.component]
+    dependency = dependencies.pop(dependency_name)
+    if dependency.pop("path") != f"../{dependency_name}":
+        parser.error(f"expected the local {dependency_name} path")
+    dependency_manifest = yaml.safe_load((COMPONENTS / dependency_name / manifest_file).read_text())
+    dependencies[f"{args.namespace}/{dependency_name}"] = {
+        **dependency,
+        "version": f"=={dependency_manifest['version']}",
     }
     if any(isinstance(dep, dict) and {"path", "override_path"} & dep.keys()
            for dep in dependencies.values()):

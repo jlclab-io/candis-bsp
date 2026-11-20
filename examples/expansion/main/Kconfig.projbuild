@@ -1,0 +1,33 @@
+menu "Candis expansion example"
+
+    config CANDIS_EXPANSION_DISPLAY
+        bool "Show expansion status on AMOLED"
+        depends on SPIRAM
+        default n
+        help
+            Requires an externally powered Candis AMOLED. Uses the board's
+            LVGL display and leaves the panel power under its existing owner.
+
+    config CANDIS_EXPANSION_SHARED_SW5
+        bool "Sample SW5 on the shared BMI270 INT1 line"
+        default n
+        help
+            Enable after checking the rail sequence and verifying that INT1
+            is high impedance for the entire input session.
+
+    config CANDIS_EXPANSION_TF_WRITE_TEST
+        bool "Verify write and readback on each inserted Dock test card"
+        default n
+        help
+            Use a writable FAT test card. Create one exclusive 4 KiB test
+            file, synchronize it, verify it after reopening, and remove it.
+
+    config CANDIS_EXPANSION_DOCK_MODULE_SCAN
+        bool "Probe the two expected Dock module EEPROM addresses"
+        default n
+        help
+            Enable with verified modules and compatible expansion I2C
+            pull-ups. Report ACK at addresses 0x51 and 0x52 once after
+            the Dock descriptor has been validated.
+
+endmenu

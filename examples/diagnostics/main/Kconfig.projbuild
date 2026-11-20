@@ -15,8 +15,8 @@ config CANDIS_DIAGNOSTICS_DC1SW
     default n
 
 config CANDIS_DIAGNOSTICS_OTG
-    bool "Run an echo test on the Candis USB OTG port"
-    select TINYUSB_CDC_ENABLED
+    bool "Use native OTG CDC for byte-exact echo"
+    depends on CANDIS_EXAMPLE_USB_CDC
     default n
 
 config CANDIS_DIAGNOSTICS_OTG_DOWNLOAD
@@ -33,5 +33,13 @@ config CANDIS_DIAGNOSTICS_PLAYBACK
     bool "Emit a short playback test through both speakers"
     depends on CANDIS_DIAGNOSTICS_AUDIO
     default n
+
+config CANDIS_DIAGNOSTICS_RECORD_REPLAY
+    bool "Replay the captured stereo clip at reduced volume"
+    depends on CANDIS_DIAGNOSTICS_AUDIO
+    default n
+    help
+        Capture 400 ms in RAM and replay once at 20 percent codec volume.
+        Connect the characterized microphone and speaker fixture.
 
 endmenu

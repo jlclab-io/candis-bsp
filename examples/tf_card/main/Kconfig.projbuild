@@ -1,0 +1,27 @@
+menu "Candis TF card example"
+
+choice CANDIS_TF_BOARD
+    prompt "TF card connector"
+    default CANDIS_TF_FIXTURE
+
+config CANDIS_TF_FIXTURE
+    bool "Validation fixture (GPIO35 card detect)"
+
+config CANDIS_TF_EXPANSION
+    bool "Dock or Gamepad (GPIO39 card detect)"
+
+endchoice
+
+config CANDIS_TF_MANAGE_POWER
+    bool "Enable DC1SW for the attached fixture"
+    help
+        Only enable for an expansion domain with known loads. The example
+        holds DC1SW until Q is received on the console.
+
+config CANDIS_TF_WRITE_TEST
+    bool "Enable the explicit W command to verify a 4 KiB temporary file"
+    help
+        Use a test card. The example opens an unused filename exclusively,
+        synchronizes and compares its contents, then removes the file.
+
+endmenu

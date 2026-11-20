@@ -1,0 +1,23 @@
+menu "TG28-ESP monitor"
+
+    config TG28_EXAMPLE_SCL
+        int "I2C SCL GPIO"
+        default 6
+
+    config TG28_EXAMPLE_SDA
+        int "I2C SDA GPIO"
+        default 7
+
+    config TG28_EXAMPLE_SAMPLES
+        int "Number of samples before releasing the bus"
+        range 1 3600
+        default 20
+
+    config TG28_EXAMPLE_SCRATCH_TEST
+        bool "Verify and restore PMU scratch bytes on a dedicated fixture"
+        default n
+        help
+            Temporarily writes REG04-07 and restores the previous values.
+            Use only when no bootloader or other processor owns these bytes.
+
+endmenu

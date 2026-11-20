@@ -32,6 +32,13 @@ esp_err_t candis_baseboard_decode(const uint8_t *image, size_t length, candis_ba
  */
 esp_err_t candis_baseboard_probe(candis_baseboard_info_t *info);
 
+/** Probe 1 to 32 selected 7-bit addresses on a powered expansion bus.
+ * Release UART0 and any external GPIO58/59 loopback first, as for baseboard_probe().
+ * Output bit i indicates an ACK at addresses[i]. Return transport errors separately
+ * from a missing ACK. Output is set only after the bus is released successfully.
+ */
+esp_err_t candis_expansion_probe_addresses(const uint8_t *addresses, size_t count, uint32_t *responding);
+
 #ifdef __cplusplus
 }
 #endif

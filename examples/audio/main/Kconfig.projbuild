@@ -1,0 +1,15 @@
+menu "Candis audio recorder"
+
+config CANDIS_RECORDER_MANAGE_PANEL_POWER
+    bool "Allow the recorder to enable ALDO1"
+    default n
+    help
+        Enable on a characterized fixture compatible with a nominal 3.3 V ALDO1.
+
+config CANDIS_RECORDER_MANAGE_AUDIO_POWER
+    bool "Allow the recorder to enable ALDO2 during capture and playback"
+    default n
+    help
+        Enable on the audio fixture with the board's microphone and speaker connections.
+
+endmenu

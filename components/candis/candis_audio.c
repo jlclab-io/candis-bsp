@@ -135,11 +135,12 @@ static esp_err_t release_channel(i2s_chan_handle_t *channel)
     if (!*channel) {
         return ESP_OK;
     }
-    esp_err_t err = i2s_channel_disable(*channel);
-    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
-        return err;
+    i2s_chan_info_t info;
+    ESP_RETURN_ON_ERROR(i2s_channel_get_info(*channel, &info), TAG, "read I2S state");
+    if (info.is_enabled) {
+        ESP_RETURN_ON_ERROR(i2s_channel_disable(*channel), TAG, "stop I2S channel");
     }
-    err = i2s_del_channel(*channel);
+    const esp_err_t err = i2s_del_channel(*channel);
     if (err == ESP_OK) {
         *channel = NULL;
     }

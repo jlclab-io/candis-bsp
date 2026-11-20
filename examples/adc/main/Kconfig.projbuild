@@ -1,0 +1,22 @@
+menu "Candis ADC example"
+
+choice CANDIS_ADC_CONNECTOR
+    prompt "ADC input pair"
+    default CANDIS_ADC_FIXTURE
+
+config CANDIS_ADC_FIXTURE
+    bool "Validation fixture joystick (GPIO43 and GPIO44)"
+
+config CANDIS_ADC_GAMEPAD
+    bool "Gamepad joystick or external analog input (GPIO42 and GPIO43)"
+
+endchoice
+
+config CANDIS_ADC_MANAGE_POWER
+    bool "Power the fixture joystick through DC1SW"
+    depends on CANDIS_ADC_FIXTURE
+    help
+        Only enable with the Candis validation fixture. The example turns on
+        DC1SW during sampling and restores its original state afterward.
+
+endmenu
