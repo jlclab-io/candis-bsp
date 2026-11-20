@@ -7,14 +7,14 @@ Candis 板载 USB-C 使用原生 USB OTG。示例启动后通常会提供 USB CD
 ## 首次烧录
 
 1. [构建示例](../../README_ZH.md#快速开始)，接好支持数据传输的 USB 线，并关闭占用板卡串口的终端。
-2. 按住 **BOOT** 复位板卡，再松开 **BOOT**。在电脑上确认 ESP32-S31 ROM 串口。综合测试板也可用独立的 USB Serial/JTAG 接口烧录与恢复。
+2. 进入 ROM 下载模式。若板卡已开机或烧录失败，先长按 **PWRON** **6 秒**关机。按住 **BOOT**，同时按下 **PWRON** **2 秒**开机。松开 **BOOT**，在电脑上确认 ESP32-S31 ROM 串口。综合测试板也可用独立的 USB Serial/JTAG 接口烧录与恢复。
 3. 用 ESP-IDF 烧录完整工程。将 `/dev/ttyACM0` 换成已确认的 ROM 串口。
 
    ```sh
    idf.py --preview -C examples/display -p /dev/ttyACM0 flash
    ```
 
-4. 正常启动后，在串口终端打开应用 CDC 端口。若板卡仍停留在 ROM 下载模式，松开 **BOOT** 后复位。
+4. 正常启动后，在串口终端打开应用 CDC 端口。若板卡仍停留在 ROM 下载模式，松开 **BOOT** 后关机再开机。
 
 首次安装或需要变更分区布局时使用完整烧录。变更布局前先备份需要保留的数据。
 
@@ -35,7 +35,7 @@ python3 tools/candis_otg_flash.py --serial YOUR_BOARD_SERIAL --build-dir example
 ## 找不到串口
 
 - 检查 USB 数据线，重启后重新连接。ROM 下载和应用 CDC 的串口名称可能不同。
-- 应用 CDC 不可用时，按住 **BOOT** 进入 ROM 下载模式。也可使用综合测试板上的 USB Serial/JTAG 接口。
+- 应用 CDC 不可用时，按[首次烧录](#首次烧录)中的 BOOT 和 PWRON 按键顺序进入 ROM 下载模式。也可使用综合测试板上的 USB Serial/JTAG 接口。
 - `idf.py menuconfig` 的 **Candis example USB** 菜单可设置原生 CDC 与自动下载。独立复制示例时，用 [`copy_example_usb.sh`](../../tools/copy_example_usb.sh) 将 [`candis_example_usb`](../../examples/common/candis_example_usb) 复制到示例的 `components/` 中。
 
 独立复制工程后，更新应用清单以解析 BSP 依赖。如果清单使用 [`candis_example_tf`](../../examples/common/candis_example_tf)，也要复制该组件并更新它的 Candis 依赖。

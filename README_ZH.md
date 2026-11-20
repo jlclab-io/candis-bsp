@@ -1,39 +1,40 @@
-# Candis BSP
-
-[English](README.md) · **简体中文**
-
-[![ESP-IDF 构建](https://github.com/jlclab-io/candis-bsp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jlclab-io/candis-bsp/actions/workflows/ci.yml)
-
-[快速开始](#快速开始) · [组件](#组件) · [示例](#示例) · [使用文档](docs/zh/README.md)
-
-**Candis** 是一款 ESP32-S31 开发板，配备 2.14 英寸、480 × 480 AMOLED 触摸屏。BSP 提供显示、触摸、RTC 和板级电源接口，可按硬件配置启用音频、运动传感和存储。项目目前处于开发预览阶段。
-
-## 支持的硬件
-
-| 硬件 | 修订 | 支持功能 |
-| --- | --- | --- |
-| Candis | 1.2 | 可独立使用的核心板，配备 AMOLED、电容触控、RTC 和原生 USB-C |
-| Candis Dock | 1.1、1.2 | 可选底板，提供 TF（microSD）、扬声器接口及两个扩展座 |
-| Candis Gamepad | 1.0 | 可选底板，提供摇杆轴、按键和旋转编码器 |
-
-断电后安装底板。每次只装一块，并同时连接两组板对板接口。供电与引脚要求见[硬件指南](docs/zh/hardware.md)。
+<div align="center">
+  <h1>Candis BSP</h1>
+  <p><strong>Candis 开发板的 ESP-IDF 支持包</strong></p>
+  <p>ESP32-S31 &nbsp;·&nbsp; 2.14 英寸 480 × 480 AMOLED 触摸屏 &nbsp;·&nbsp; Dock 与 Gamepad 扩展</p>
+  <p>
+    <a href="https://github.com/jlclab-io/candis-bsp/actions/workflows/ci.yml"><img alt="ESP-IDF 构建" src="https://github.com/jlclab-io/candis-bsp/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  </p>
+  <p>
+    <a href="#快速开始"><strong>快速开始</strong></a> ·
+    <a href="#板卡">板卡</a> ·
+    <a href="docs/zh/examples.md">示例</a> ·
+    <a href="docs/zh/README.md">使用文档</a> ·
+    <a href="README.md">English</a>
+  </p>
+</div>
 
 ## 快速开始
 
-1. 使用 ESP-IDF 6.2 和 ESP32-S31 工具链。在 ESP-IDF 目录运行 `./install.sh esp32s31` 和 `source ./export.sh`。[CI 验证的 ESP-IDF 修订](https://github.com/espressif/esp-idf/commit/2b10d1278a547f5dc92efbe516144b4ae85f80cb)需要用 `--preview` 启用 ESP32-S31。
-2. 构建显示示例。
+**准备 ESP-IDF。** 使用 [ESP-IDF 6.2](https://github.com/espressif/esp-idf/commit/2b10d1278a547f5dc92efbe516144b4ae85f80cb)。在 ESP-IDF 目录运行 `./install.sh esp32s31` 和 `source ./export.sh`。
 
-   ```sh
-   git clone https://github.com/jlclab-io/candis-bsp.git
-   cd candis-bsp
-   idf.py --preview -C examples/display build
-   ```
+**构建显示示例。** 使用此 SDK 修订时，ESP32-S31 需要 `--preview`。
 
-3. 使用支持数据传输的 USB 线连接板卡。确认 AMOLED 已供电，按 [USB 与固件下载](docs/zh/usb.md)烧录示例。进入 **Partial**、**Full** 或 **Scan** 页面，并拖动手指体验触控。
+```sh
+git clone https://github.com/jlclab-io/candis-bsp.git
+cd candis-bsp
+idf.py --preview -C examples/display build
+```
 
-### 在应用中使用 Candis
+**烧录并体验触控。** 用支持数据传输的 USB-C 线连接板卡，确认 AMOLED 已供电，按[烧录指南](docs/zh/usb.md)烧录。进入 **Partial**、**Full** 或 **Scan** 页面，拖动手指体验触控。
 
-在应用组件的 `idf_component.yml`（例如 `main/idf_component.yml`）中添加依赖。将 `<commit-or-tag>` 替换为 Candis BSP 的 Git 提交或标签。
+> [!TIP]
+> 如果烧录失败，长按 **PWRON** **6 秒**关机。然后按住 **BOOT**，同时按下 **PWRON** **2 秒**开机，进入 ROM 下载模式。选择 ROM 串口并重新烧录。
+
+<details>
+<summary><strong>在自己的应用中接入 Candis</strong></summary>
+
+在应用组件的 `idf_component.yml`（例如 `main/idf_component.yml`）中添加以下依赖，将 `<commit-or-tag>` 替换为 BSP 提交或标签。
 
 ```yaml
 dependencies:
@@ -43,28 +44,38 @@ dependencies:
     version: "<commit-or-tag>"
 ```
 
-本地开发时可使用相对于清单的 `path`。例如应用与 BSP 在同级目录时，该路径为 `../../candis-bsp/components/candis`。包含 `bsp/esp-bsp.h`，调用 `bsp_display_start()` 启动 LVGL。配置与示例见 [API 指南](docs/zh/api.md#显示与触摸)。
+当应用与 BSP 在同级目录时，可用相对于清单的 `path: ../../candis-bsp/components/candis`。包含 `bsp/esp-bsp.h` 并调用 `bsp_display_start()` 启动 LVGL。完整示例见 [API 指南](docs/zh/api.md#显示与触摸)。
 
-## 组件
+</details>
 
-| 组件 | 用途 |
-| --- | --- |
-| [`candis`](components/candis/README.md) | 核心板 BSP 和共享外设资源 |
-| [`tg28-esp`](components/tg28-esp/README.md) | 可独立使用的 TG28-ESP 电源管理驱动 |
-| [`candis-camera`](components/candis-camera/README.md) | 可配置的 OV5640 DVP 采集 |
-| [`candis_dock`](components/candis_dock/README.md) | Dock 识别、TF 卡和扬声器声道选择 |
-| [`candis_gamepad`](components/candis_gamepad/README.md) | Gamepad 摇杆轴、按键和编码器 |
+## 板卡
+
+| 板卡 | 修订 | 接口 |
+| --- | --- | --- |
+| **Candis** | 1.2 | 核心板，配备 AMOLED、触控、RTC 和 USB-C |
+| **Candis Dock** | 1.1、1.2 | TF（microSD）、扬声器接口和两个扩展座 |
+| **Candis Gamepad** | 1.0 | 摇杆、按键和旋转编码器 |
+
+断电后安装底板。每次装一块，并同时接通两组板对板接口。[硬件与供电](docs/zh/hardware.md) · [扩展与 EEPROM](docs/zh/expansion.md)
 
 ## 示例
 
-| 示例 | 演示内容 |
-| --- | --- |
-| [显示](examples/display) | AMOLED 上的 LVGL 界面和触控 |
-| [录音机](examples/audio/README.md) · [音乐播放器](examples/music_player/README.md) | 双声道录音和播放 |
-| [摄像头](examples/camera) | OV5640 预览和拍照 |
-| [Dock](examples/dock/README.md) · [扩展板](examples/expansion) | Dock 存储和 Gamepad 输入 |
+- [**显示**](examples/display)启动 AMOLED 与 LVGL 触控界面。
+- [**录音机**](examples/audio/README.md)和[**音乐播放器**](examples/music_player/README.md)演示双声道录音和播放。
+- [**摄像头**](examples/camera)预览 OV5640 画面并采集图像。
+- [**Dock**](examples/dock/README.md)和[**扩展板**](examples/expansion)演示 TF 卡访问和 Gamepad 输入。
 
-更多集成说明见[完整示例目录](docs/zh/examples.md)、[硬件指南](docs/zh/hardware.md)和 [EEPROM V1 规范](docs/zh/eeprom-v1.md)。
+[查看全部示例 →](docs/zh/examples.md)
+
+## 组件
+
+- [`candis`](components/candis/README.md) 提供核心板的显示、触控、RTC、电源和外设接口。
+- [`tg28-esp`](components/tg28-esp/README.md) 是独立的 TG28-ESP 电源管理驱动。
+- [`candis-camera`](components/candis-camera/README.md) 提供可配置的 OV5640 DVP 采集。
+- [`candis_dock`](components/candis_dock/README.md) 提供 Dock 识别、TF 卡访问与扬声器声道选择。
+- [`candis_gamepad`](components/candis_gamepad/README.md) 读取摇杆轴、按键和旋转编码器。
+
+BSP 处于开发预览阶段。硬件支持范围见[组件支持](docs/zh/component-coverage.md)。
 
 ## 许可证
 

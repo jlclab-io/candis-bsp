@@ -1,39 +1,40 @@
-# Candis BSP
-
-**English** · [简体中文](README_ZH.md)
-
-[![ESP-IDF build](https://github.com/jlclab-io/candis-bsp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jlclab-io/candis-bsp/actions/workflows/ci.yml)
-
-[Quick start](#quick-start) · [Components](#components) · [Examples](#examples) · [Documentation](docs/en/README.md)
-
-Board support for **Candis**, an ESP32-S31 development board with a 2.14-inch, 480 × 480 AMOLED touchscreen. The BSP initializes the display, touch controller, RTC, and board power interfaces, with APIs for audio, motion sensing, and storage on compatible hardware. The project is in development preview.
-
-## Boards
-
-| Hardware | Revision | Support |
-| --- | --- | --- |
-| Candis | 1.2 | Standalone core board with AMOLED, capacitive touch, RTC, and native USB-C |
-| Candis Dock | 1.1, 1.2 | Optional baseboard with TF (microSD), a speaker connector, and two expansion headers |
-| Candis Gamepad | 1.0 | Optional baseboard with joystick axes, buttons, and a rotary encoder |
-
-Fit one baseboard at a time using both board-to-board connectors, with power disconnected. Check the [hardware guide](docs/en/hardware.md) for rail and pin requirements.
+<div align="center">
+  <h1>Candis BSP</h1>
+  <p><strong>ESP-IDF board support for Candis</strong></p>
+  <p>ESP32-S31 &nbsp;·&nbsp; 2.14-inch 480 × 480 AMOLED touchscreen &nbsp;·&nbsp; Dock and Gamepad expansion</p>
+  <p>
+    <a href="https://github.com/jlclab-io/candis-bsp/actions/workflows/ci.yml"><img alt="ESP-IDF build" src="https://github.com/jlclab-io/candis-bsp/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  </p>
+  <p>
+    <a href="#quick-start"><strong>Quick start</strong></a> ·
+    <a href="#boards">Boards</a> ·
+    <a href="docs/en/examples.md">Examples</a> ·
+    <a href="docs/en/README.md">Documentation</a> ·
+    <a href="README_ZH.md">简体中文</a>
+  </p>
+</div>
 
 ## Quick start
 
-1. Use ESP-IDF 6.2 and the ESP32-S31 toolchain. From your ESP-IDF checkout, run `./install.sh esp32s31` and `source ./export.sh`. The [CI-tested ESP-IDF revision](https://github.com/espressif/esp-idf/commit/2b10d1278a547f5dc92efbe516144b4ae85f80cb) requires `--preview` for ESP32-S31.
-2. Build the display example.
+**Prepare ESP-IDF.** Use [ESP-IDF 6.2](https://github.com/espressif/esp-idf/commit/2b10d1278a547f5dc92efbe516144b4ae85f80cb). In the ESP-IDF checkout, run `./install.sh esp32s31` and `source ./export.sh`.
 
-   ```sh
-   git clone https://github.com/jlclab-io/candis-bsp.git
-   cd candis-bsp
-   idf.py --preview -C examples/display build
-   ```
+**Build the display example.** ESP32-S31 uses `--preview` with the linked SDK revision.
 
-3. Connect the board with a data-capable USB cable. Confirm the AMOLED supply is on, then follow [USB and flashing](docs/en/usb.md) to install the example. Use **Partial**, **Full**, or **Scan** on the display and drag a finger to try touch input.
+```sh
+git clone https://github.com/jlclab-io/candis-bsp.git
+cd candis-bsp
+idf.py --preview -C examples/display build
+```
 
-### Add Candis to an application
+**Flash and try touch.** Connect USB-C with a data cable, confirm the AMOLED is powered, and follow the [flashing guide](docs/en/usb.md). Open **Partial**, **Full**, or **Scan** and drag a finger across the display.
 
-Add a dependency to your application component's `idf_component.yml`, such as `main/idf_component.yml`. Replace `<commit-or-tag>` with a Candis BSP Git revision.
+> [!TIP]
+> If flashing fails, hold **PWRON** for **6 seconds** to power off. Then hold **BOOT** and press **PWRON** for **2 seconds** to power on in ROM download mode. Select the ROM port and retry flashing.
+
+<details>
+<summary><strong>Add Candis to your application</strong></summary>
+
+Add this dependency to your application component's `idf_component.yml`, such as `main/idf_component.yml`. Replace `<commit-or-tag>` with a BSP revision.
 
 ```yaml
 dependencies:
@@ -43,28 +44,38 @@ dependencies:
     version: "<commit-or-tag>"
 ```
 
-For local development, use a `path` relative to the manifest, such as `../../candis-bsp/components/candis` for sibling checkouts. Include `bsp/esp-bsp.h` and start LVGL with `bsp_display_start()`. See the [API guide](docs/en/api.md#display-and-touch) for configuration and an LVGL example.
+For a sibling local checkout, use the manifest-relative `path: ../../candis-bsp/components/candis`. Include `bsp/esp-bsp.h` and call `bsp_display_start()` to run LVGL. The [API guide](docs/en/api.md#display-and-touch) has a complete example.
 
-## Components
+</details>
 
-| Component | Use |
-| --- | --- |
-| [`candis`](components/candis/README.md) | Core board support and shared peripheral resources |
-| [`tg28-esp`](components/tg28-esp/README.md) | Standalone TG28-ESP power-management driver |
-| [`candis-camera`](components/candis-camera/README.md) | Configurable DVP capture for OV5640 |
-| [`candis_dock`](components/candis_dock/README.md) | Dock identification, TF card support, and speaker routing |
-| [`candis_gamepad`](components/candis_gamepad/README.md) | Gamepad axes, buttons, and encoder |
+## Boards
+
+| Board | Revision | Interfaces |
+| --- | --- | --- |
+| **Candis** | 1.2 | Core board with AMOLED, touch, RTC, and USB-C |
+| **Candis Dock** | 1.1, 1.2 | TF (microSD), speaker connector, and two expansion headers |
+| **Candis Gamepad** | 1.0 | Joystick, buttons, and rotary encoder |
+
+Power off before fitting a baseboard. Connect one baseboard at a time across both board-to-board connectors. [Hardware and power](docs/en/hardware.md) · [Expansion and EEPROM](docs/en/expansion.md)
 
 ## Examples
 
-| Start with | What it demonstrates |
-| --- | --- |
-| [Display](examples/display) | LVGL on AMOLED with touch input |
-| [Audio recorder](examples/audio/README.md) · [Music player](examples/music_player/README.md) | Stereo recording and playback |
-| [Camera](examples/camera) | OV5640 preview and still capture |
-| [Dock](examples/dock/README.md) · [Expansion](examples/expansion) | Dock storage and Gamepad input |
+- [**Display**](examples/display) brings up the AMOLED and LVGL touch UI.
+- [**Audio recorder**](examples/audio/README.md) and [**music player**](examples/music_player/README.md) demo stereo recording and playback.
+- [**Camera**](examples/camera) previews and captures frames from an OV5640.
+- [**Dock**](examples/dock/README.md) and [**expansion**](examples/expansion) exercise microSD and Gamepad input.
 
-See the [full example catalog](docs/en/examples.md), [hardware guide](docs/en/hardware.md), and [EEPROM V1 specification](docs/en/eeprom-v1.md) for board integration.
+[Browse all examples →](docs/en/examples.md)
+
+## Components
+
+- [`candis`](components/candis/README.md) provides the core board's display, touch, RTC, power, and peripheral APIs.
+- [`tg28-esp`](components/tg28-esp/README.md) is the standalone TG28-ESP power management driver.
+- [`candis-camera`](components/candis-camera/README.md) provides configurable OV5640 DVP capture.
+- [`candis_dock`](components/candis_dock/README.md) manages Dock identification, TF cards, and speaker routing.
+- [`candis_gamepad`](components/candis_gamepad/README.md) reads joystick axes, buttons, and the encoder.
+
+The BSP is in development preview. See [component support](docs/en/component-coverage.md) for hardware coverage.
 
 ## License
 
