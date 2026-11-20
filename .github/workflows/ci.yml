@@ -29,55 +29,36 @@ on:
 permissions:
   contents: read
 
+env:
+  IDF_REVISION: 2b10d1278a547f5dc92efbe516144b4ae85f80cb
+
 jobs:
-  build:
+  examples:
+    name: Examples (${{ matrix.group }})
     runs-on: ubuntu-24.04
     timeout-minutes: 45
-    env:
-      IDF_REVISION: 2b10d1278a547f5dc92efbe516144b4ae85f80cb
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [core, camera, expansion, system]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - name: Check Registry configuration
-        if: github.event_name == 'workflow_dispatch' && (inputs.publish || inputs.publish_camera || inputs.publish_tg28 || inputs.publish_dock || inputs.publish_gamepad)
-        env:
-          REGISTRY_NAMESPACE: ${{ vars.IDF_COMPONENT_NAMESPACE }}
-          REGISTRY_TOKEN: ${{ secrets.IDF_COMPONENT_API_TOKEN }}
-        run: |
-          test "$GITHUB_REF" = 'refs/heads/main' || { echo 'Run this workflow from main'; exit 1; }
-          test -n "$REGISTRY_NAMESPACE" || { echo 'Set the IDF_COMPONENT_NAMESPACE repository variable'; exit 1; }
-          test -n "$REGISTRY_TOKEN" || { echo 'Set the IDF_COMPONENT_API_TOKEN repository secret'; exit 1; }
-      - name: Install host dependencies
-        run: |
-          packages=()
-          command -v cmake >/dev/null || packages+=(cmake)
-          command -v ninja >/dev/null || packages+=(ninja-build)
-          if ! dpkg-query -W -f='${db:Status-Status}' libusb-1.0-0 | grep -qx installed; then
-            packages+=(libusb-1.0-0)
-          fi
-          if ((${#packages[@]})); then
-            sudo timeout 180 apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update
-            sudo timeout 120 apt-get install -y "${packages[@]}"
-          fi
-      - name: Fetch ESP-IDF and the S31 toolchain
-        run: |
-          git init "$RUNNER_TEMP/esp-idf"
-          git -C "$RUNNER_TEMP/esp-idf" remote add origin https://github.com/espressif/esp-idf.git
-          git -C "$RUNNER_TEMP/esp-idf" fetch --depth 1 origin "$IDF_REVISION"
-          git -C "$RUNNER_TEMP/esp-idf" checkout --detach FETCH_HEAD
-          git -C "$RUNNER_TEMP/esp-idf" submodule update --init --recursive --jobs 8
-          "$RUNNER_TEMP/esp-idf/install.sh" esp32s31
-      - name: Build the standalone examples
+      - uses: ./.github/actions/setup-esp32s31
+      - name: Build core examples
+        if: matrix.group == 'core'
         run: |
           source "$RUNNER_TEMP/esp-idf/export.sh"
           idf.py --preview -C examples/display build
           idf.py --preview -C examples/diagnostics -D 'SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.features' build
           idf.py --preview -C examples/audio build
           idf.py --preview -C examples/music_player build
-          idf.py --preview -C examples/expansion build
-          idf.py --preview -C examples/expansion -B "$RUNNER_TEMP/dock-tf-build" \
-            -D "SDKCONFIG=$RUNNER_TEMP/dock-tf.sdkconfig" \
-            -D 'SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.tf_test;sdkconfig.modules' build
-          idf.py --preview -C examples/dock build
+          idf.py --preview -C examples/power build
+          idf.py --preview -C examples/motor build
+          idf.py --preview -C examples/tg28 build
+      - name: Build camera examples
+        if: matrix.group == 'camera'
+        run: |
+          source "$RUNNER_TEMP/esp-idf/export.sh"
           idf.py --preview -C examples/camera build
           idf.py --preview -C examples/camera -B "$RUNNER_TEMP/camera-jpeg-build" \
             -D "SDKCONFIG=$RUNNER_TEMP/camera-jpeg.sdkconfig" \
@@ -97,17 +78,22 @@ jobs:
           idf.py --preview -C examples/camera -B "$RUNNER_TEMP/camera-manual-build" \
             -D "SDKCONFIG=$RUNNER_TEMP/camera-manual.sdkconfig" \
             -D 'SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.manual' build
-          idf.py --preview -C examples/rtc build
+      - name: Build expansion examples
+        if: matrix.group == 'expansion'
+        run: |
+          source "$RUNNER_TEMP/esp-idf/export.sh"
+          idf.py --preview -C examples/expansion build
+          idf.py --preview -C examples/expansion -B "$RUNNER_TEMP/dock-tf-build" \
+            -D "SDKCONFIG=$RUNNER_TEMP/dock-tf.sdkconfig" \
+            -D 'SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.tf_test;sdkconfig.modules' build
+          idf.py --preview -C examples/dock build
           idf.py --preview -C examples/motion build
           printf 'CONFIG_CANDIS_MOTION_MANAGE_POWER=y\nCONFIG_CANDIS_MOTION_TEST_STORAGE=y\n' \
             > "$RUNNER_TEMP/motion-fixture.defaults"
           idf.py --preview -C examples/motion -B "$RUNNER_TEMP/motion-fixture-build" \
             -D "SDKCONFIG=$RUNNER_TEMP/motion-fixture.sdkconfig" \
             -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;$RUNNER_TEMP/motion-fixture.defaults" build
-          idf.py --preview -C examples/power build
-          idf.py --preview -C examples/motor build
-          idf.py --preview -C examples/tg28 build
-          for example in tf_card adc gpio wifi_scan ble_scan sleep baseboard flash; do
+          for example in tf_card adc baseboard; do
             idf.py --preview -C "examples/$example" build
           done
           idf.py --preview -C examples/tf_card -B "$RUNNER_TEMP/tf-fixture-build" \
@@ -118,6 +104,31 @@ jobs:
               -D "SDKCONFIG=$RUNNER_TEMP/adc-$variant.sdkconfig" \
               -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.$variant" build
           done
+      - name: Build system examples
+        if: matrix.group == 'system'
+        run: |
+          source "$RUNNER_TEMP/esp-idf/export.sh"
+          idf.py --preview -C examples/rtc build
+          for example in gpio wifi_scan ble_scan sleep flash; do
+            idf.py --preview -C "examples/$example" build
+          done
+
+  build:
+    needs: examples
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Check Registry configuration
+        if: github.event_name == 'workflow_dispatch' && (inputs.publish || inputs.publish_camera || inputs.publish_tg28 || inputs.publish_dock || inputs.publish_gamepad)
+        env:
+          REGISTRY_NAMESPACE: ${{ vars.IDF_COMPONENT_NAMESPACE }}
+          REGISTRY_TOKEN: ${{ secrets.IDF_COMPONENT_API_TOKEN }}
+        run: |
+          test "$GITHUB_REF" = 'refs/heads/main' || { echo 'Run this workflow from main'; exit 1; }
+          test -n "$REGISTRY_NAMESPACE" || { echo 'Set the IDF_COMPONENT_NAMESPACE repository variable'; exit 1; }
+          test -n "$REGISTRY_TOKEN" || { echo 'Set the IDF_COMPONENT_API_TOKEN repository secret'; exit 1; }
+      - uses: ./.github/actions/setup-esp32s31
       - name: Run host tests
         run: |
           source "$RUNNER_TEMP/esp-idf/export.sh"
