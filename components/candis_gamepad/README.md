@@ -1,33 +1,17 @@
 # Candis Gamepad
 
-Input support for the Candis Gamepad expansion. Use both expansion
-connectors and provide stable DC1SW and ALDO3 power throughout the input
-session.
+Input support for the Candis Gamepad rev. 1.0 baseboard. Use both BTB connectors, supply DC1SW and ALDO3, and release UART0 on GPIO58/59 before identifying the board.
 
-For local development, add a `path` dependency on `components/candis_gamepad`
-to the application manifest. The component resolves `candis` from the same
-checkout. See `examples/expansion` for a buildable application.
+## Use in an application
 
-Release UART0 on GPIO58/59 before probing the EEPROM. Include
-`bsp/candis_gamepad.h`, open the inputs with `candis_gamepad_open()` and a
-verified Gamepad descriptor, poll with `candis_gamepad_read()`, and close
-with `candis_gamepad_close()` before removing power. Call these APIs from
-one control task.
+Add a dependency on `components/candis_gamepad` and include [`bsp/candis_gamepad.h`](include/bsp/candis_gamepad.h). Verify the Gamepad descriptor before opening the inputs. Use a single control task to poll inputs and close the driver before removing power.
 
-For joystick axes and processed input, pass a `candis_gamepad_config_t` to
-`candis_gamepad_open_with_config()`. Set `axes` to reserve the GPIO42/43 ADC
-unit. Poll with `candis_gamepad_poll()` at a cadence that covers all encoder
-phases. Samples contain raw ADC readings, a button mask, debounced edge masks
-and a signed encoder delta. Each delta counts a complete A/B cycle.
-Set `calibrate_axes` alongside `axes` to obtain calibrated millivolts in
-`x_mv` and `y_mv` when `voltage_valid` is set. The returned raw values
-are ESP32-S31 ADC comparator vectors. Use the measured center and travel
-on the actual joystick to map millivolts to movement. The expansion
-example shows calibrated voltages and logs both values and raw vectors.
+| Need | API or configuration |
+| --- | --- |
+| Raw digital inputs | `candis_gamepad_open()` and `candis_gamepad_read()` |
+| Debounced edges and encoder delta | `candis_gamepad_open_with_config()` and `candis_gamepad_poll()`. Poll fast enough to see each encoder phase |
+| Joystick axes | Set `axes` to use the GPIO42/43 ADC channels. Enable `calibrate_axes` for millivolts when `voltage_valid` is set. Measure center and travel on the actual joystick |
+| SW5 | Set `shared_sw5` only with BMI270 INT1 high impedance and stable power throughout the session |
+| Cleanup | `candis_gamepad_close()` |
 
-The SW5 input on GPIO38 is opt-in through `shared_sw5`. The application
-must keep BMI270 INT1 high impedance and both expansion rails stable for
-the full session. The default config samples the other inputs.
-
-Host tests cover the descriptor parser, button bounce and quadrature changes.
-Physical Gamepad and electrical validation remain pending.
+[Expansion example](https://github.com/jlclab-io/candis-bsp/tree/main/examples/expansion) · [Hardware](https://github.com/jlclab-io/candis-bsp/blob/main/docs/en/expansion.md#resource-allocation) · [Apache-2.0](LICENSE)

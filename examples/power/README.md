@@ -1,34 +1,11 @@
-# Candis TG28-ESP 电源示例
+# Candis power monitor
 
-AMOLED 显示充电恒流设定、充电状态、电池电压、电量、输出使能和中断状态。
-串口每秒输出一组读数。未连接电池时，页面保留电源状态并显示电池缺席。
+The AMOLED displays supply and charging state, battery voltage, reported state of charge, and rail enables. The default build reads the PMU without changing charge settings. Confirm the [panel supply](../../docs/en/hardware.md#power) before starting.
 
 ```sh
 idf.py --preview -C examples/power build
 ```
 
-屏幕由已确认的 3.3 V ALDO1 电源轨供电。综合测试板可叠加
-`sdkconfig.defaults;sdkconfig.bench`，允许 BSP 管理 ALDO1。默认不写充电参数。
+Follow [USB and flashing](../../docs/en/usb.md) to install the application. The power page remains available when the battery is absent. The displayed charge current is a programmed target. Actual battery current requires measurement in the battery branch.
 
-右上角 **Touch test** 显示按下、长按和松手状态，并在串口输出持续时间。
-
-## 200 mAh 电池充电演示
-
-用 `CANDIS_POWER_DEMO_CHARGE_TEST` 启用触控测试并选择目标档。
-25 mA 档从已确认的 50 mA 基线降档，测试期间采用相同的确认、停止和恢复流程。
-200 mA 档使用下面的台架和测量条件。
-
-默认恒流档 50 mA 对应 TG28-ESP REG62 低五位 `0x02`，200 mA 对应 `0x08`。
-REG62 设置的是恒流目标。采集实际电流时，仪表串在电池支路，USB 输入电流还包含整板负载。
-数据手册仅给出 800 mA 档的电流精度。200 mAh 电池包的限值为 200 mA，台架需要能把实际
-电流独立限制在该值以内，并具备电芯温度切断。Candis 的固定 10 kΩ TS 接法不测电芯温度。
-
-确认台架条件后，在 `menuconfig` 打开 `CANDIS_POWER_DEMO_CHARGE_TEST`。
-使用已确认适用 4.2 V 终止电压的电池，连接输入电源，等屏幕显示 50 mA 和恒流充电。
-点击 **200 mA test**，在 8 秒内点击 **Confirm 200 mA**，开始最长 15 秒的测试。
-记录电池支路电流、VBAT、温度和屏幕读回。
-点击 **Stop test** 立即退出。输入或电池异常、退出恒流阶段、I²C 错误和超时均会触发恢复。
-恢复失败会尝试关闭充电并继续复核。如提示切断输入，操作台应能独立切断充电。
-在异常复位后，重新接入电池前核对 REG62 和充电使能状态。
-
-示例正常路径仅写恒流设定。CV、预充、终止、TS、JEITA 与安全计时器保留台架原配置。
+Use the default read-only profile for monitoring. The optional charge test requires a qualified battery and supervised equipment with independent current and temperature cutoffs. A fixed TS resistor provides no cell temperature measurement. See the [TG28-ESP driver guide](../../docs/en/tg28-esp-coverage.md) for integration requirements.
