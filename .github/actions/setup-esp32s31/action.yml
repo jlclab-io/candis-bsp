@@ -1,9 +1,42 @@
 name: Set up ESP32-S31
-description: Install host dependencies and the pinned ESP32-S31 SDK
+description: Fetch the pinned ESP-IDF sources and optionally install ESP32-S31 build tools
+inputs:
+  install_tools:
+    description: Install the ESP32-S31 compiler and flashing tools
+    required: false
+    default: 'true'
 runs:
   using: composite
   steps:
+    - name: Configure ESP-IDF tool directory
+      if: inputs.install_tools == 'true'
+      shell: bash
+      run: |
+        echo "IDF_TOOLS_PATH=$RUNNER_TEMP/espressif-tools" >> "$GITHUB_ENV"
+        mkdir -p "$RUNNER_TEMP/espressif-tools"
+    - name: Cache ESP-IDF source
+      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+      with:
+        path: ${{ runner.temp }}/esp-idf
+        key: ${{ runner.os }}-idf-${{ env.IDF_REVISION }}-source-v1
+    - name: Cache ESP-IDF tools
+      if: inputs.install_tools == 'true'
+      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+      with:
+        path: ${{ runner.temp }}/espressif-tools
+        key: ${{ runner.os }}-idf-${{ env.IDF_REVISION }}-esp32s31-tools-v1
+    - name: Cache resolved component dependencies
+      if: inputs.install_tools == 'true'
+      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+      with:
+        path: |
+          examples/*/managed_components
+          tests/bsp_api/managed_components
+        key: ${{ runner.os }}-idf-${{ env.IDF_REVISION }}-components-${{ hashFiles('**/dependencies.lock', '**/idf_component.yml') }}
+        restore-keys: |
+          ${{ runner.os }}-idf-${{ env.IDF_REVISION }}-components-
     - name: Install host dependencies
+      if: inputs.install_tools == 'true'
       shell: bash
       run: |
         packages=()
@@ -16,12 +49,23 @@ runs:
           sudo timeout 180 apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update
           sudo timeout 120 apt-get install -y "${packages[@]}"
         fi
-    - name: Fetch ESP-IDF and the S31 toolchain
+    - name: Fetch pinned ESP-IDF sources
       shell: bash
       run: |
-        git init "$RUNNER_TEMP/esp-idf"
-        git -C "$RUNNER_TEMP/esp-idf" remote add origin https://github.com/espressif/esp-idf.git
+        if [[ ! -d "$RUNNER_TEMP/esp-idf/.git" ]]; then
+          git init "$RUNNER_TEMP/esp-idf"
+        fi
+        if git -C "$RUNNER_TEMP/esp-idf" remote get-url origin >/dev/null 2>&1; then
+          git -C "$RUNNER_TEMP/esp-idf" remote set-url origin https://github.com/espressif/esp-idf.git
+        else
+          git -C "$RUNNER_TEMP/esp-idf" remote add origin https://github.com/espressif/esp-idf.git
+        fi
         git -C "$RUNNER_TEMP/esp-idf" fetch --depth 1 origin "$IDF_REVISION"
         git -C "$RUNNER_TEMP/esp-idf" checkout --detach FETCH_HEAD
         git -C "$RUNNER_TEMP/esp-idf" submodule update --init --recursive --jobs 8
+        echo "IDF_PATH=$RUNNER_TEMP/esp-idf" >> "$GITHUB_ENV"
+    - name: Install ESP32-S31 build tools
+      if: inputs.install_tools == 'true'
+      shell: bash
+      run: |
         "$RUNNER_TEMP/esp-idf/install.sh" esp32s31
