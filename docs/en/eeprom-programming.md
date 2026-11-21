@@ -6,13 +6,13 @@ This guide applies to dedicated programming fixtures and authorized production o
 
 ## AT24C02 transactions
 
-Dock rev. 1.2 and Gamepad use the SOP-8 AT24C02 (LCSC `C688857`) at U10. The part holds 256 bytes in 32 pages of 8 bytes and uses an 8-bit word address. Its maximum internal write time is 5 ms. Verify the actual part, temperature, and supply conditions against the datasheet. For substitutions, recheck the page size, address pins, write protection, timing, and voltage. [AT24C02 datasheet, sections 2 and 10–13](https://atta.szlcsc.com/upload/public/pdf/source/20200619/C688857_168265888F77B455D6D4136881F4BB15.pdf)
+Dock rev. 1.2 uses the SOP-8 AT24C02 (LCSC `C688857`) at U10. The part holds 256 bytes in 32 pages of 8 bytes and uses an 8-bit word address. Its maximum internal write time is 5 ms. Verify the actual part, temperature, and supply conditions against the datasheet. For substitutions, recheck the page size, address pins, write protection, timing, and voltage. [AT24C02 datasheet, sections 2 and 10–13](https://atta.szlcsc.com/upload/public/pdf/source/20200619/C688857_168265888F77B455D6D4136881F4BB15.pdf)
 
 - **Device address.** Set the A2/A1/A0 straps with power off. Tie each to the EEPROM's VCC or GND. Pass the 7-bit address `0x50 | (A2<<2) | (A1<<1) | A0` to the I²C driver. The on-wire write/read control bytes for BTB, LEFT, and RIGHT are respectively `A0/A1`, `A2/A3`, and `A4/A5` in hex. See [locations and addresses](expansion.md#locations-and-addresses).
 - **Random start, sequential read.** At 100 kHz, issue START, device address with W, and the 8-bit offset. Issue repeated START and device address with R. ACK each received byte except the last, then send NACK and STOP. Start at `0x00`. Read 134 bytes for discovery and up to 256 bytes for programming and backup. Stay within `0x00..0xFF`. The initial W phase sets the offset.
 - **Page write.** Issue START, device address with W, offset, and page data. STOP starts the internal write. Write no more than `min(bytes_remaining, 8 - (offset % 8))` bytes per transaction. Crossing a page boundary wraps and overwrites bytes within that page. Compare existing data and skip matching pages. A write may span from the first to the last differing byte of a page using the original values for any unchanged bytes in between.
 - **ACK polling.** After STOP, send START with the same 7-bit write address and end the probe. After NACK, wait briefly, for example 1 ms, and retry. After ACK, read back the bytes. Bound the operation to 30 ms from STOP and abort on timeout, bus fault, or mismatch. With fixtures that only support combined reads, wait the full 5 ms and use bounded readback within the page to verify readiness and data.
-- **Write protect.** Pin 7 tied to VCC protects the entire array. GND permits writes. Dock rev. 1.2 and Gamepad hard-wire WP to ground, so the station and firmware restrict writes. Avoid driving the pin high on those boards. New modules should pull WP up to the EEPROM supply by default and allow the authorized fixture to pull it low. Confirm the voltage domain, restore protection after programming, and read back the data.
+- **Write protect.** Pin 7 tied to VCC protects the entire array. GND permits writes. Dock rev. 1.2 hard-wires WP to ground, so the station and firmware restrict writes. Leave the grounded WP pin undriven. New modules should pull WP up to the EEPROM supply by default and allow the authorized fixture to pull it low. Confirm the voltage domain, restore protection after programming, and read back the data.
 
 ## Production workflow
 
@@ -36,7 +36,6 @@ These offline reference descriptors use magic `CND`, Vendor `0xCA4E`, SW Compati
 | Board Name | Location and address | Type / Product ID | Hardware Revision | Serial Number | TLV and purpose |
 | --- | --- | --- | --- | --- | --- |
 | `candis_bb` | BTB `0x50` | `0x31 / 0x0003` | `0x0100` | `0x00030001` | Length 0, direct baseboard without slots |
-| `candis_gamepad` | BTB `0x50` | `0x30 / 0x0001` | `0x0100` | `0x00010001` | 17 bytes, 90° clockwise rotation, X 110/1500/2840 mV and Y 125/1540/2950 mV |
 | `candis_dock` | BTB `0x50` | `0x31 / 0x0002` | `0x0102` | `0x00020001` | Length 0, rev. 1.2 profile with right speaker channel and two slots |
 | `candis_joystick` | LEFT `0x51` | `0x32 / 0x0101` | `0x0100` | `0x01010001` | 14 bytes, X 150/1500/2850 mV and Y 160/1550/2900 mV |
 | `candis_sensor` | RIGHT `0x52` | `0x32 / 0x0102` | `0x0100` | `0x01020001` | 4 bytes, 2000 ms interval. The approved firmware profile supplies function address `0x44` |
@@ -44,7 +43,6 @@ These offline reference descriptors use magic `CND`, Vendor `0xCA4E`, SW Compati
 | Board Name | Identity CRC | Manufacturing CRC | Parameter CRC |
 | --- | --- | --- | --- |
 | `candis_bb` | `0x133A` | `0x00C1` | `0xC619` |
-| `candis_gamepad` | `0x594E` | `0x00C1` | `0xF3E6` |
 | `candis_dock` | `0x6527` | `0x00C1` | `0xC619` |
 | `candis_joystick` | `0x35E7` | `0x00C1` | `0x91BF` |
 | `candis_sensor` | `0xFE75` | `0x00C1` | `0xC660` |
@@ -63,20 +61,6 @@ Each row starts with a hexadecimal offset, followed by bytes in increasing addre
 60  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 70  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 80  00 00 00 00 19 C6
-```
-
-### Gamepad
-
-```text
-00  43 4E 44 30 01 00 00 01 00 01 4E CA 00 00 00 00
-10  01 00 01 00 63 61 6E 64 69 73 5F 67 61 6D 65 70
-20  61 64 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-30  00 00 00 00 4E 59 00 29 35 01 05 00 02 00 C1 00
-40  01 00 11 00 01 01 01 02 0C 6E 00 DC 05 18 0B 7D
-50  00 04 06 86 0B 00 00 00 00 00 00 00 00 00 00 00
-60  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-70  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-80  00 00 00 00 E6 F3
 ```
 
 ### Dock

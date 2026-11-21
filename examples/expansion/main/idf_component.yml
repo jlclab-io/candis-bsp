@@ -1,5 +1,3 @@
 dependencies:
   candis_dock:
     path: ../../../components/candis_dock
-  candis_gamepad:
-    path: ../../../components/candis_gamepad

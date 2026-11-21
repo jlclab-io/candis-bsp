@@ -8,19 +8,20 @@ From the root of the checkout, run `idf.py --preview -C examples/<name> build` i
 
 | Example | What to try |
 | --- | --- |
+| [Minimal](../../examples/candis_minimal) | Standard I²C start and stop, shared references, and release retry. |
 | [Display](../../examples/display) | Try LVGL, AMOLED refresh, and touch with ALDO1 supplied. |
 | [Audio recorder](../../examples/audio/README.md) | Record and play stereo clips with the touchscreen. Connect the microphones and speakers and supply ALDO1/ALDO2. |
 | [Music player](../../examples/music_player/README.md) | Play the bundled score and select speaker channels. Requires display and audio power. |
 | [Camera](../../examples/camera) | Preview OV5640 on the AMOLED. Use the camera fixture profile; still and JPEG options are in the [camera guide](../../components/candis-camera/README.md). |
 | [TF card](../../examples/tf_card) | Browse a FAT-formatted card. Select the card-detect pin for the hardware and ensure DC1SW is supplied. |
-| [Expansion](../../examples/expansion) | Read Gamepad input or browse Dock storage after identifying the baseboard. |
-| [Dock](../../examples/dock/README.md) | Open a Dock session, browse a TF card, and use the display or speaker. |
-| [ADC](../../examples/adc) | Sample two joystick axes with calibrated millivolts when available. Choose the fixture or Gamepad profile. |
+| [Expansion](../../examples/expansion) | Detect the Dock, browse its TF card, and optionally probe module addresses. |
+| [Dock](../../examples/dock/README.md) | Identify the Dock and exercise TF, BMI270, display and audio. |
+| [ADC](../../examples/adc) | Sample two analog inputs. Defaults to the Dock LEFT header. |
 | [Motion](../../examples/motion) | Sample BMI270 motion and temperature with the expansion rail already powered. |
 | [RTC](../../examples/rtc) | Read or set UTC and try RTC update wake. See [RTC console](#rtc-console). |
 | [Power](../../examples/power/README.md) | Show power and charge telemetry on AMOLED. The default profile reads the PMU configuration. |
 | [TG28 monitor](../../examples/tg28/README.md) | Read TG28-ESP status over I²C from a standalone application. |
-| [Motor](../../examples/motor/README.md) | Run a short PWM pulse on the evaluation fixture's fitted motor. |
+| [Motor](../../examples/motor/README.md) | Run a short PWM pulse on the fitted M1 motor. |
 
 ## Board and system
 
@@ -36,15 +37,14 @@ From the root of the checkout, run `idf.py --preview -C examples/<name> build` i
 
 ## Board profiles
 
-Build variants in separate directories with separate `SDKCONFIG` files. For example, the Gamepad analog axes are GPIO42/43 and require ALDO3. Build their profile with the command below. Use `sdkconfig.fixture` instead for the evaluation fixture's GPIO43/44 axes and DC1SW supply. Connect external analog signals only within the ADC input range and with a common ground.
+| Example | Hardware | GPIO notes |
+| --- | --- | --- |
+| TF card | Candis Dock | Card detect on GPIO39 |
+| ADC | Candis Dock (LEFT header) | GPIO42 and GPIO43 at U6.20 and U6.18 |
+| Camera | OV5640 module | Reset and power-down controlled per [camera wiring](../../components/candis-camera/README.md#custom-wiring) |
+| LED and motor | Core board and Dock | LED on GPIO37, motor on GPIO5 |
 
-```sh
-idf.py --preview -C examples/adc -B "$PWD/build/adc-gamepad" \
-  -D "SDKCONFIG=$PWD/build/adc-gamepad/sdkconfig" \
-  -D 'SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.gamepad' build
-```
-
-For TF card examples, verify GPIO39 on Dock or Gamepad, or GPIO35 on the evaluation fixture. Keep Dock U6 empty or confirm its GPIO39 connection stays high impedance. Use a FAT-formatted card for directory browsing.
+For Dock TF storage, keep LEFT U6 empty or leave GPIO39 high impedance. Use a FAT-formatted card. Leave GPIO37 available at U6.8 to use the core LED. Connect external ADC inputs with a common ground and keep them within the configured 0 dB attenuation range.
 
 ## RTC console
 

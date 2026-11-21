@@ -311,7 +311,7 @@ class Ov5640Test(unittest.TestCase):
             subprocess.run(
                 ["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-fsanitize=undefined",
                  "-fno-sanitize-recover=undefined", f"-I{root}", f"-I{idf}",
-                 f"-I{component / 'include'}", f"-I{component}", str(component / "candis_ov5640.c"),
+                 f"-I{component / 'include'}", f"-I{component / 'priv_include'}", str(component / "src/candis_ov5640.c"),
                  str(test), "-o", str(binary)],
                 check=True,
             )

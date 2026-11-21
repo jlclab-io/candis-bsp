@@ -37,19 +37,6 @@ dependencies:
     targets:
     - esp32s31
     version: 0.1.0
-  candis_gamepad:
-    dependencies:
-    - name: idf
-      version: '>=6.2,<6.3'
-    - name: candis
-      path: ../candis
-      public: true
-    source:
-      path: ../../components/candis_gamepad
-      type: local
-    targets:
-    - esp32s31
-    version: 0.1.0
   espressif/cmake_utilities:
     component_hash: 351350613ceafba240b761b4ea991e0f231ac7a9f59a9ee901f751bddc0bb18f
     dependencies:
@@ -174,8 +161,7 @@ dependencies:
 direct_dependencies:
 - candis
 - candis_dock
-- candis_gamepad
 - espressif/esp_tinyusb
-manifest_hash: 21cb5b59af8336502a637e8f603272ffeb847c69c5e33cb35b85710424c3fb18
+manifest_hash: b7f944c14165ef7467ee411c93e2682daa4d6fc54bb42179cccac3f0f58d811b
 target: esp32s31
 version: 3.0.0

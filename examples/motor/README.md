@@ -1,6 +1,6 @@
 # Candis motor example
 
-Use the fitted M1 motor on the Candis evaluation fixture and connect a stable USB supply. Build the example and follow [USB and flashing](../../docs/en/usb.md).
+Use the fitted M1 motor on Candis Dock rev. 1.2. GPIO5 routes to the motor driver. Connect a stable USB supply, build the example, and follow [USB and flashing](../../docs/en/usb.md).
 
 ```sh
 idf.py --preview -C examples/motor build

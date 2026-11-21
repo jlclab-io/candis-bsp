@@ -2,10 +2,8 @@
 #include "candis_example_usb.h"
 #include <dirent.h>
 #include <errno.h>
-#include <inttypes.h>
 #include <stdio.h>
 #include "bsp/candis_dock.h"
-#include "bsp/candis_gamepad.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -169,67 +167,6 @@ static esp_err_t monitor_dock(const candis_baseboard_info_t *identity)
     return release == ESP_OK ? last_scan : release;
 }
 
-static esp_err_t monitor_gamepad(const candis_baseboard_info_t *identity)
-{
-    candis_gamepad_config_t config = CANDIS_GAMEPAD_CONFIG_DEFAULT();
-    config.axes = true;
-    config.calibrate_axes = true;
-#ifdef CONFIG_CANDIS_EXPANSION_SHARED_SW5
-    config.shared_sw5 = true;
-#endif
-    esp_err_t err = candis_gamepad_open_with_config(identity, &config);
-    if (err != ESP_OK) {
-        return err;
-    }
-    const int64_t deadline = esp_timer_get_time() + 30000000;
-    int64_t report_at = 0;
-#ifdef CONFIG_CANDIS_EXPANSION_DISPLAY
-    int64_t draw_at = 0;
-#endif
-    int32_t steps = 0;
-    TickType_t next = xTaskGetTickCount();
-    while (esp_timer_get_time() < deadline) {
-        candis_gamepad_sample_t sample;
-        err = candis_gamepad_poll(&sample);
-        if (err != ESP_OK) {
-            break;
-        }
-        steps += sample.encoder_steps;
-        const int64_t now = esp_timer_get_time();
-        if (now >= report_at || sample.pressed || sample.released) {
-            ESP_LOGI(TAG, "raw_x=%d raw_y=%d voltage_valid=%d x_mv=%d y_mv=%d"
-                     " encoder=%" PRId32 " down=0x%" PRIx32 " up=0x%" PRIx32,
-                     sample.raw_x, sample.raw_y, sample.voltage_valid, sample.x_mv, sample.y_mv,
-                     steps, sample.pressed, sample.released);
-            report_at = now + 250000;
-        }
-#ifdef CONFIG_CANDIS_EXPANSION_DISPLAY
-        if (now >= draw_at) {
-            char axes[44] = "Joystick voltage unavailable";
-            if (sample.voltage_valid) {
-                snprintf(axes, sizeof(axes), "X %d mV    Y %d mV", sample.x_mv, sample.y_mv);
-            }
-            char status[168];
-            snprintf(status, sizeof(status),
-                     "%s\nEncoder %" PRId32
-                     "\nJoystick %s   Encoder key %s\nSW3 %s   SW4 %s   SW5 %s   SW6 %s",
-                     axes, steps,
-                     sample.buttons & CANDIS_GAMEPAD_JOYSTICK ? "ON" : "off",
-                     sample.buttons & CANDIS_GAMEPAD_ENCODER ? "ON" : "off",
-                     sample.buttons & CANDIS_GAMEPAD_SW3 ? "ON" : "off",
-                     sample.buttons & CANDIS_GAMEPAD_SW4 ? "ON" : "off",
-                     config.shared_sw5 ? (sample.buttons & CANDIS_GAMEPAD_SW5 ? "ON" : "off") : "-",
-                     sample.buttons & CANDIS_GAMEPAD_SW6 ? "ON" : "off");
-            show_status(status);
-            draw_at = now + 100000;
-        }
-#endif
-        xTaskDelayUntil(&next, pdMS_TO_TICKS(2));
-    }
-    const esp_err_t release = candis_gamepad_close();
-    return err == ESP_OK ? release : err;
-}
-
 void app_main(void)
 {
     ESP_ERROR_CHECK_WITHOUT_ABORT(candis_example_usb_start(CANDIS_EXAMPLE_USB_CONSOLE, true));
@@ -243,7 +180,7 @@ void app_main(void)
             ESP_LOGW(TAG, "Display unavailable: %s", esp_err_to_name(err));
         }
 #endif
-        err = identity.kind == CANDIS_BASEBOARD_BB ? monitor_dock(&identity) : monitor_gamepad(&identity);
+        err = monitor_dock(&identity);
     }
     ESP_LOGI(TAG, "Expansion diagnostic: %s", esp_err_to_name(err));
 #ifdef CONFIG_CANDIS_EXPANSION_DISPLAY

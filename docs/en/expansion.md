@@ -2,13 +2,11 @@
 
 [Documentation](README.md) · [简体中文](../zh/expansion.md)
 
-The 30-pin CN1 and 50-pin CN2 on Candis mate with the same BTB baseboard. Fit one baseboard at a time. Use the [EEPROM V1 product registry](eeprom-v1.md#ids-and-hardware-revisions) to identify supported products and revisions. The discovery specification enumerates modules only on approved Dock profiles. The reserved `candis_bb` product is a direct baseboard without slots. The BSP enum `CANDIS_BASEBOARD_BB` identifies Dock.
+The 30-pin CN1 and 50-pin CN2 on Candis mate with one Dock baseboard at a time. The BSP recognizes Dock rev. 1.1/1.2 as `CANDIS_BASEBOARD_BB` (EEPROM product ID 2). The EEPROM V1 layout is unchanged, and valid product identities outside the supported Dock revisions return `ESP_ERR_NOT_SUPPORTED`. Module discovery is limited to approved Dock profiles.
 
 ```text
 Candis core board
   CN1 + CN2 → BTB 0x50 → One baseboard
-                         ├ candis_bb (reserved)
-                         ├ candis_gamepad
                          └ candis_dock
                            ├ LEFT  (U6) → 0x51
                            └ RIGHT (U7) → 0x52
@@ -16,15 +14,15 @@ Candis core board
 
 ## EEPROM wiring
 
-Dock rev. 1.2 and Gamepad use the AT24C02 (`C688857`) at U10. A0/A1/A2 and WP are tied to GND. VCC is on DC1SW. U10's SDA and SCL connect to the expansion bus through Q3 (2N7002DW), with its gates and both 4.7 kΩ pull-ups tied to DC1SW. Dock U6/U7 share the expansion bus side of Q3. The core board and the evaluation fixture have no baseboard descriptor EEPROM.
+Dock rev. 1.2 uses the AT24C02 (`C688857`) at U10. A0/A1/A2 and WP are tied to GND. VCC is on DC1SW. U10's SDA and SCL connect to the expansion bus through Q3 (2N7002DW), with its gates and both 4.7 kΩ pull-ups tied to DC1SW. Dock U6/U7 share the expansion bus side of Q3. The core board has no baseboard descriptor EEPROM.
 
 ### BTB pinout
 
-The core board uses `C41421082` at CN1 and `C41421084` at CN2. Both Dock rev. 1.2 and Gamepad use the `C41421022` and `C41421024` mating connectors. The following mapping is based on schematic and PCB connectivity and connector orientation. Verify the mating drawing, pin 1, and continuity on the intended assembly before manufacturing. Multiple pins in a row match in the listed order. For example, core CN2.11/12 mate with baseboard CN2.15/14. Baseboard CN2.11/12 carry VBAT.
+The core board uses `C41421082` at CN1 and `C41421084` at CN2. Dock rev. 1.2 uses the `C41421022` and `C41421024` mating connectors. The following mapping is based on schematic and PCB connectivity and connector orientation. Verify the mating drawing, pin 1, and continuity on the intended assembly before manufacturing. Multiple pins in a row match in the listed order. For example, core CN2.11/12 mate with baseboard CN2.15/14. Baseboard CN2.11/12 carry VBAT.
 
 #### CN1
 
-| Core board pin | Dock rev. 1.2 / Gamepad pin | Net |
+| Core board pin | Dock rev. 1.2 pin | Net |
 | --- | --- | --- |
 | 1, 2 | 29, 27 | `RSPK_N` |
 | 3 | 25 | `GPIO42` |
@@ -54,7 +52,7 @@ The core board uses `C41421082` at CN1 and `C41421084` at CN2. Both Dock rev. 1.
 
 #### CN2
 
-| Core board pin | Dock rev. 1.2 / Gamepad pin | Net |
+| Core board pin | Dock rev. 1.2 pin | Net |
 | --- | --- | --- |
 | 1 | 25 | `GPIO48` |
 | 2 | 24 | `GPIO49` |
@@ -84,8 +82,6 @@ The core board uses `C41421082` at CN1 and `C41421084` at CN2. Both Dock rev. 1.
 | 45 | 45 | `GPIO47` |
 | 46 | 46 | `GPIO46` |
 | 47, 48, 49, 50 | 47, 48, 49, 50 | `BB_5V_IN` |
-
-The evaluation fixture uses a different BTB assignment. The fixture profile uses GPIO39 and GPIO40 for camera reset and power-down, and GPIO35 for card detect. Select the fixture's pin and power profile when using those devices.
 
 ### Dock 20-pin headers
 
@@ -120,7 +116,7 @@ The two slots directly share GPIO35, EXP_SCL, EXP_SDA, DC1SW, ALDO3, ALDO4, BLDO
 
 | Location | 7-bit address | A2/A1/A0 | Basis |
 | --- | --- | --- | --- |
-| BTB U10 | `0x50` | `000` | Confirmed in the Dock rev. 1.2 and Gamepad rev. 1.0 designs |
+| BTB U10 | `0x50` | `000` | Confirmed in the Dock rev. 1.2 design |
 | Dock LEFT (U6) | `0x51` | `001` | Required by this specification. Strap on the module or adapter |
 | Dock RIGHT (U7) | `0x52` | `010` | Required by this specification. Strap on the module or adapter |
 
@@ -135,7 +131,7 @@ Two devices at one address may both acknowledge and return data that appears val
 1. **Start the core board.** Keep dedicated expansion lines high impedance and defer conflicting functions. Enable discovery only for a known assembly and verified supply conditions. DC1SW powers TF, IMU, U10, and attached modules together. Their power-on defaults and combined load must be safe. Otherwise keep the core board active and report why probing is unavailable.
 2. **Acquire expansion I²C.** Keep main I²C0 on GPIO6/7. Route I²C1 over the GPIO matrix to GPIO58 SCL and GPIO59 SDA, the native UART0 pins. Release UART0 and external drivers before claiming both open-drain lines. Keep a verified download path such as native USB OTG. Exclude concurrent access by other drivers or the programming fixture. Confirm DC1SW and its upstream supply are stable and SDA/SCL idle high before reading at 100 kHz.
 3. **Discover the parent.** Read 134 bytes at offset `0x00` from `0x50`. Allow at most three attempts per address, with at least 5 ms between attempts recommended. Use a 30 ms probe timeout and a 40 ms combined read timeout. Require two consecutive identical reads before [V1 validation](eeprom-v1.md#validation-and-compatibility). Record stable NACK as no response and changing data or mixed ACK/NACK/timeouts as unstable. Stop probing on a stuck-low line or bus-level error.
-4. **Discover slots on an approved Dock.** After validating its exact revision and assembly profile, read `0x51` and then `0x52` under the same rules. Keep module drivers off until both slots have been assessed together. Only registered addresses are scanned. Unidentified assemblies, Gamepad, and the direct BB profile have no slot scan.
+4. **Discover slots on an approved Dock.** After validating its exact revision and assembly profile, read `0x51` and then `0x52` under the same rules. Keep module drivers off until both slots have been assessed together. Only registered addresses are scanned. Unidentified assemblies and the direct BB profile have no slot scan.
 5. **Reserve resources and bind.** Review the topology against the active core functions. Record location, I²C controller and address, decoded identity, serial number, status, and generation. Bind handles to the generation. Reserve all resources before the configured power and reset sequence. Roll back resources acquired by a failed bind and keep core functions running.
 
 | Discovery result | Default action |
@@ -156,7 +152,7 @@ Match the core and parent revisions, slot, and [product key](eeprom-v1.md#ids-an
 
 | Resource | Allocation and conflicts |
 | --- | --- |
-| GPIO and pin multiplexing | GPIO35 is shared across slots. GPIO39 and GPIO38 have other wired loads. Outputs and alternate functions are exclusive by default. Shared inputs require compatible domains, pulls, and semantics, with no conflicting output. Reserve core, reset, boot, recovery, and fixed board functions first. Confirm the GPIO33/34 USB Serial/JTAG and GPIO54–57 external JTAG assignments before reuse. VBAT, PWRON, NTC, VSYS, 5V, differential speaker outputs, and CHIP_PU are fixed signals |
+| GPIO and pin multiplexing | GPIO35 is shared across slots. GPIO39 is also connected to card detect. GPIO37 is shared with the core LED. Outputs and alternate functions are exclusive by default. Shared inputs require compatible domains, pulls, and semantics, with no conflicting output. Reserve core, reset, boot, recovery, and fixed board functions first. Confirm the GPIO33/34 USB Serial/JTAG and GPIO54–57 external JTAG assignments before reuse. VBAT, PWRON, NTC, VSYS, 5V, differential speaker outputs, and CHIP_PU are fixed signals |
 | ADC | Reserve the verified GPIO, ADC unit, channel, and input mode. Record attenuation, range, and calibration. Keep the ADC pin free of digital outputs and other conflicting modes |
 | I²C | Share the verified controller and pins. Reserve each (bus, 7-bit address) for one device. Expansion addresses `0x50..0x52` are reserved for descriptors. Check addresses, voltage, open-drain operation, parallel pull-ups, and capacitance for all powered devices. BMI270 `0x68` is on main I²C |
 | SPI | Reserve an exclusive controller or approved shared clock/data lines with individual CS and agreed clock limits. Unselected devices release the return line. Reserve the core flash, PSRAM, and display resources first. Generic Dock SPI pin assignments are unregistered |
@@ -167,7 +163,6 @@ Match the core and parent revisions, slot, and [product key](eeprom-v1.md#ids-an
 | --- | --- |
 | Core board | TG28, RTC, touch, and audio use I²C0. Reserve core display, storage, and download resources. Use core-only operation without an available baseboard |
 | `candis_bb` | Reserved direct baseboard without slots. Identity uses `0x50`. Register its remaining resources from its own schematic and BOM |
-| `candis_gamepad` rev. 1.0 | SDMMC uses GPIO20–25 with CD on GPIO39. FPC1 joystick X/Y/press uses GPIO42/43/35 and ALDO3. Encoder SW2 A/B/press uses GPIO48/49/50. SW3–6 use GPIO46/47/38/40. GPIO38 shares SW5 and BMI270 INT1. Its pull-up uses ALDO3, while BMI270 VDDIO uses DC1SW. Keep INT1 output disabled and verify the state. Qualify rail timing and backfeed |
 | `candis_dock` rev. 1.2 | SDMMC uses the same pins and GPIO39 CD. BMI270 connects to I²C0 through Q2. CN3 carries the right differential speaker output. Rev. 1.1 carries the left output. Use only validated slot pin assignments and sharing arrangements |
 | Reference joystick | LEFT U6.20/GPIO42 and U6.18/GPIO43 are X/Y, U6.6/GPIO36 is the press input. U6.11/DC1SW and GND supply the module. U6.17/15 are SCL/SDA. The only I²C device is EEPROM `0x51`. Verify ADC range and mode, pulls, and assembly keying |
 | Reference sensor | RIGHT U7.16/18 are SCL/SDA, and U7.10/20 are DC1SW/GND. EEPROM uses `0x52`, with `0x44` as the example sensor address and no GPIO IRQ. Register the actual part, straps, timing, and load before use |
@@ -186,6 +181,6 @@ Hot-plug support requires a hardware revision with per-slot detection, controlle
 
 ## BSP support
 
-- `candis_baseboard_probe()` explicitly checks the deployed `ESP` descriptor at `0x50` for Gamepad rev. 1.0 or Dock rev. 1.1/1.2. The application decides when to probe and which driver to start.
+- `candis_baseboard_probe()` explicitly checks the deployed `ESP` descriptor at `0x50` for supported Dock revisions. `candis_baseboard_probe_state()` and `candis_dock_get_state()` distinguish an identified but unopened Dock from an active component session. The application decides when to probe and which driver to start.
 - `candis_dock_probe_modules()` reports address responses on `0x51` and `0x52`. The `CND` reader, child descriptor validation, and topology-wide resource allocation described here require host integration before use.
 - Before deploying an assembly, verify connector orientation and continuity, matched revisions, address straps and WP, rail timing and combined load, and cold-start handling of blank or incompatible descriptors. Qualify the intended module combinations, shared pins, and resource release on the assembled board.

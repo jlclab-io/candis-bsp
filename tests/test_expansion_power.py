@@ -146,6 +146,21 @@ int main(void)
     assert(candis_expansion_power_release() == ESP_OK && enables == DC1SW);
     assert(candis_power_release(&second) == ESP_OK && !enables && !bus_users);
     assert(candis_expansion_power_release() == ESP_OK && !bus_users);
+
+    candis_expansion_power_handle_t dock = NULL;
+    assert(candis_expansion_power_acquire(true) == ESP_OK && enables == DC1SW);
+    assert(candis_expansion_power_claim(false, &dock) == ESP_OK && dock);
+    assert(candis_expansion_power_claim(false, &dock) == ESP_ERR_INVALID_STATE && dock);
+    assert(candis_expansion_power_release() == ESP_OK && enables == DC1SW);
+    assert(candis_expansion_power_unclaim(&dock) == ESP_OK && !dock && !enables && !bus_users);
+    assert(candis_expansion_power_unclaim(&dock) == ESP_OK && !bus_users);
+
+    candis_power_t panel = {.rail = CANDIS_RAIL_DISPLAY};
+    candis_power_t touch = {.rail = CANDIS_RAIL_DISPLAY};
+    assert(candis_power_acquire(&panel, true, 150) == ESP_OK && enables == CANDIS_RAIL_DISPLAY);
+    assert(candis_power_acquire(&touch, false, 0) == ESP_OK && bus_users == 1);
+    assert(candis_power_release(&panel) == ESP_OK && enables == CANDIS_RAIL_DISPLAY);
+    assert(candis_power_release(&touch) == ESP_OK && !enables && !bus_users);
     return 0;
 }
 """
@@ -158,9 +173,11 @@ class ExpansionPowerTest(unittest.TestCase):
             (root / 'sdkconfig.h').write_text('#define CONFIG_COMPILER_OPTIMIZATION_PERF 0\n')
             (root / 'driver').mkdir()
             (root / 'driver/i2c_master.h').write_text('#pragma once\n' + I2C_HEADER)
-            private = (COMPONENT / 'candis_internal.h').read_text().replace('#include "bsp/candis.h"', '')
+            private = (COMPONENT / 'priv_include/candis_internal.h').read_text().replace('#include "bsp/candis.h"', '')
             (root / 'candis_internal.h').write_text(private)
             (root / 'esp_check.h').write_text(
+                '#undef ESP_ERROR_CHECK_WITHOUT_ABORT\n'
+                '#define ESP_ERROR_CHECK_WITHOUT_ABORT(call) ((void)(call))\n'
                 '#define ESP_RETURN_ON_ERROR(call, tag, ...) do { (void)(tag); '
                 'esp_err_t e = (call); if (e != ESP_OK) return e; } while (0)\n'
                 '#define ESP_RETURN_ON_FALSE(condition, error, tag, ...) do { (void)(tag); '
@@ -171,14 +188,15 @@ class ExpansionPowerTest(unittest.TestCase):
             (root / 'freertos/FreeRTOS.h').write_text('#define pdMS_TO_TICKS(ms) (ms)\n')
             (root / 'freertos/task.h').write_text('static inline void vTaskDelay(int ticks) { (void)ticks; }\n')
             driver = root / 'candis_power.c'
-            shutil.copyfile(COMPONENT / driver.name, driver)
+            shutil.copyfile(COMPONENT / 'src' / driver.name, driver)
             source = root / 'test_expansion_power.c'
             source.write_text(TEST_SOURCE)
             idf = Path(os.environ['IDF_PATH'])
             executable = root / 'test_expansion_power'
             subprocess.run(['cc', '-std=c11', '-Wall', '-Werror', f'-I{root}', f'-I{COMPONENT}', f"-I{COMPONENT / 'include'}",
-                            f"-I{TG28 / 'include'}", f"-I{idf / 'components/esp_common/include'}",
-                            str(driver), str(TG28 / 'tg28_esp.c'), str(source),
+                            f"-I{COMPONENT / 'priv_include'}", f"-I{TG28 / 'include'}",
+                            f"-I{TG28 / 'priv_include'}", f"-I{idf / 'components/esp_common/include'}",
+                            str(driver), str(TG28 / 'src/tg28_esp.c'), str(TG28 / 'src/tg28_esp_regulator.c'), str(source),
                             '-o', str(executable)], check=True)
             subprocess.run([str(executable)], check=True)
 

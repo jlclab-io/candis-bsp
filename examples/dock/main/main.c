@@ -7,6 +7,7 @@
 #include "bsp/candis.h"
 #include "bsp/candis_audio.h"
 #include "bsp/candis_dock.h"
+#include "bsp/candis_imu.h"
 #include "bsp/candis_power.h"
 #include "candis_example_usb.h"
 #include "display.h"
@@ -30,6 +31,9 @@ static bool s_mount;
 static bool s_display;
 static bool s_panel_only;
 static bool s_audio;
+#if BSP_CAPS_IMU
+static bool s_imu_cleanup;
+#endif
 static int s_card_state = -1;
 static bool s_card_sample;
 static unsigned s_card_samples;
@@ -148,7 +152,7 @@ static esp_err_t close_expansion(void)
         s_mount = false;
     }
     if (s_detect) {
-        ESP_RETURN_ON_ERROR(candis_storage_detect_stop(), TAG, "release GPIO39");
+        ESP_RETURN_ON_ERROR(candis_storage_detect_stop(), TAG, "release TF card detect");
         s_detect = false;
     }
     s_card_state = -1;
@@ -176,15 +180,7 @@ static esp_err_t open_expansion(bool fixture)
         s_fixture = true;
         err = candis_expansion_power_acquire(true);
         if (err == ESP_OK) {
-            ESP_LOGI(TAG, "Manual fixture profile selected");
-            const esp_err_t identity = identify();
-            if (identity != ESP_OK) {
-                static const uint8_t eeprom_address = 0x50;
-                uint32_t ack;
-                if (candis_expansion_probe_addresses(&eeprom_address, 1, &ack) == ESP_OK) {
-                    ESP_LOGI(TAG, "EEPROM 0x50 %s", ack ? "ACK" : "no ACK");
-                }
-            }
+            ESP_LOGI(TAG, "Validation fixture profile selected, TF CD on GPIO35");
         }
     } else {
         err = candis_dock_open(true, &s_identity);
@@ -196,7 +192,7 @@ static esp_err_t open_expansion(bool fixture)
     }
     if (err == ESP_OK) {
         s_detect = true;
-        err = fixture ? candis_storage_detect_start(CANDIS_STORAGE_EXPANSION)
+        err = fixture ? candis_storage_detect_start(CANDIS_STORAGE_FIXTURE)
                       : candis_dock_detect_start(&s_identity);
     }
     if (err != ESP_OK) {
@@ -207,21 +203,12 @@ static esp_err_t open_expansion(bool fixture)
 
 static esp_err_t probe_modules(void)
 {
-    if (s_dock) {
-        candis_dock_module_scan_t scan;
-        ESP_RETURN_ON_ERROR(candis_dock_probe_modules(&s_identity, &scan), TAG, "probe module addresses");
-        ESP_LOGI(TAG, "MODULES 0x51=%s 0x52=%s", scan.address_51 ? "ACK" : "no ACK",
-                 scan.address_52 ? "ACK" : "no ACK");
-        return ESP_OK;
-    }
-    if (!s_fixture) {
+    if (!s_dock) {
         return ESP_ERR_INVALID_STATE;
     }
-    static const uint8_t addresses[] = {0x51, 0x52};
-    uint32_t responding;
-    ESP_RETURN_ON_ERROR(candis_expansion_probe_addresses(addresses, 2, &responding), TAG, "probe module addresses");
-    ESP_LOGI(TAG, "MODULES manual 0x51=%s 0x52=%s", responding & 1 ? "ACK" : "no ACK",
-             responding & 2 ? "ACK" : "no ACK");
+    candis_dock_module_scan_t scan;
+    ESP_RETURN_ON_ERROR(candis_dock_probe_modules(&s_identity, &scan), TAG, "probe module addresses");
+    ESP_LOGI(TAG, "MODULES 0x51=%s 0x52=%s", scan.address_51 ? "ACK" : "no ACK", scan.address_52 ? "ACK" : "no ACK");
     return ESP_OK;
 }
 
@@ -275,7 +262,7 @@ static esp_err_t test_card(bool write)
     s_mount = true;
     const esp_err_t mount = s_dock
         ? candis_dock_mount_with_config(&s_identity, CANDIS_EXAMPLE_TF_PATH, &config, &card)
-        : candis_storage_mount_with_config(CANDIS_EXAMPLE_TF_PATH, CANDIS_STORAGE_EXPANSION, &config, &card);
+        : candis_storage_mount_with_config(CANDIS_EXAMPLE_TF_PATH, CANDIS_STORAGE_FIXTURE, &config, &card);
     esp_err_t io = mount;
     if (mount == ESP_OK) {
         const uint64_t mib = (uint64_t)card->csd.capacity * card->csd.sector_size / (1024 * 1024);
@@ -417,6 +404,13 @@ static esp_err_t probe_touch(void)
 
 static esp_err_t release_all(void)
 {
+#if BSP_CAPS_IMU
+    esp_err_t imu = ESP_OK;
+    if (s_imu_cleanup) {
+        imu = candis_imu_stop();
+        s_imu_cleanup = imu != ESP_OK;
+    }
+#endif
     esp_err_t audio = ESP_OK;
     if (s_audio) {
         audio = candis_audio_close();
@@ -425,6 +419,11 @@ static esp_err_t release_all(void)
     const esp_err_t display = stop_display();
     const esp_err_t expansion = close_expansion();
     const esp_err_t pmu = release_pmu();
+#if BSP_CAPS_IMU
+    if (imu != ESP_OK) {
+        return imu;
+    }
+#endif
     if (audio != ESP_OK) {
         return audio;
     }
@@ -452,11 +451,86 @@ static esp_err_t tone_dock(void)
     return tone(channel, 45);
 }
 
+#if BSP_CAPS_IMU
+static esp_err_t motion(void)
+{
+    if (!s_dock || s_imu_cleanup) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    s_imu_cleanup = true;
+    esp_err_t err = candis_imu_start(false);
+    if (err == ESP_OK) {
+        candis_imu_sample_t sample;
+        vTaskDelay(pdMS_TO_TICKS(100) + 1);
+        err = candis_imu_read(&sample);
+        if (err == ESP_OK) {
+            const float *a = sample.acceleration_g;
+            const float *g = sample.angular_velocity_dps;
+            ESP_LOGI(TAG, "BMI270 a=(%.3f,%.3f,%.3f) g w=(%.3f,%.3f,%.3f) dps ticks=%" PRIu32,
+                     a[0], a[1], a[2], g[0], g[1], g[2], sample.sensor_ticks);
+            if (!a[0] && !a[1] && !a[2]) {
+                err = ESP_ERR_INVALID_RESPONSE;
+            }
+        }
+        if (err == ESP_OK) {
+            float celsius;
+            const esp_err_t temp = candis_imu_read_temperature(&celsius);
+            if (temp == ESP_OK) {
+                ESP_LOGI(TAG, "BMI270 die temperature %.2f C", celsius);
+            } else if (temp != ESP_ERR_NOT_FINISHED) {
+                err = temp;
+            }
+        }
+    }
+    const esp_err_t stop = candis_imu_stop();
+    s_imu_cleanup = stop != ESP_OK;
+    return err == ESP_OK ? stop : err;
+}
+#endif
+
+static esp_err_t selftest(void)
+{
+    ESP_LOGI(TAG, "SELFTEST begin");
+    esp_err_t err = show_power();
+    if (err == ESP_OK) {
+        err = open_expansion(false);
+    }
+    if (err == ESP_OK) {
+        err = identify();
+    }
+    if (err == ESP_OK) {
+        err = dock_eeprom_inspect();
+    }
+    if (err == ESP_OK) {
+        err = probe_modules();
+    }
+    if (err == ESP_OK) {
+        err = test_card(true);
+    }
+    if (err == ESP_OK) {
+        err = start_display(true);
+    }
+    if (err == ESP_OK) {
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        err = tone(CANDIS_DOCK_SPEAKER_LEFT, 25);
+    }
+    if (err == ESP_OK) {
+        err = tone(CANDIS_DOCK_SPEAKER_RIGHT, 25);
+    }
+    const esp_err_t release = release_all();
+    ESP_LOGI(TAG, "SELFTEST result=%s release=%s", esp_err_to_name(err), esp_err_to_name(release));
+    return err == ESP_OK ? release : err;
+}
+
 static void show_help(void)
 {
     ESP_LOGI(TAG, "Commands: power | dock | fixture | id | eeprom | modules | tf | tf write |"
              " screen on | screen panel | touch probe | screen off | screen full | screen partial |"
-             " tone dock | tone l | tone r | tone l loud | tone r loud | tone l 100 | tone r 100 | echo TEXT | release");
+             " tone dock | tone l | tone r | tone l loud | tone r loud | tone l 100 | tone r 100 |"
+             " selftest | echo TEXT | release");
+#if BSP_CAPS_IMU
+    ESP_LOGI(TAG, "imu: start, read and release BMI270 on the identified Dock");
+#endif
 }
 
 static void run_command(const char *line)
@@ -469,7 +543,7 @@ static void run_command(const char *line)
     } else if (!strcmp(line, "id")) {
         err = identify();
     } else if (!strcmp(line, "eeprom")) {
-        err = s_detect ? dock_eeprom_inspect() : ESP_ERR_INVALID_STATE;
+        err = s_dock ? dock_eeprom_inspect() : ESP_ERR_INVALID_STATE;
     } else if (!strcmp(line, "modules")) {
         err = probe_modules();
     } else if (!strcmp(line, "tf") || !strcmp(line, "tf write")) {
@@ -484,11 +558,17 @@ static void run_command(const char *line)
         err = dock_display_mode(!strcmp(line, "screen full"));
     } else if (!strcmp(line, "tone dock")) {
         err = tone_dock();
+#if BSP_CAPS_IMU
+    } else if (!strcmp(line, "imu")) {
+        err = motion();
+#endif
     } else if (!strcmp(line, "tone l") || !strcmp(line, "tone r") ||
                !strcmp(line, "tone l loud") || !strcmp(line, "tone r loud")) {
         err = tone(line[5] == 'r', strlen(line) == 6 ? 25 : 45);
     } else if (!strcmp(line, "tone l 100") || !strcmp(line, "tone r 100")) {
         err = tone(line[5] == 'r', 100);
+    } else if (!strcmp(line, "selftest")) {
+        err = selftest();
     } else if (!strncmp(line, "echo ", 5)) {
         ESP_LOGI(TAG, "ECHO %s", line + 5);
         return;

@@ -13,14 +13,34 @@ dependencies:
   idf: ">=6.2,<6.3"
   tg28-esp:
     path: ../tg28-esp
-  espressif/esp_lcd_touch_cst9220: "0.1.2"
-  espressif/esp_lvgl_port: "2.9.0"
+  espressif/esp_lcd_touch_cst9220:
+    version: "0.1.2"
+    public: true
+  espressif/esp_lvgl_port:
+    version: "2.9.0"
+    public: true
+    rules:
+      - if: $CONFIG{CANDIS_NO_GRAPHIC_LIB} == False
   lvgl/lvgl:
     version: "9.6.0~1"
     public: true
+    rules:
+      - if: $CONFIG{CANDIS_NO_GRAPHIC_LIB} == False
   espressif/esp_codec_dev:
     version: "1.6.2"
+    public: true
+    rules:
+      - if: $CONFIG{CANDIS_AUDIO} == True
   espressif/bmi270:
     version: "1.1.0"
     rules:
       - if: $CONFIG{CANDIS_IMU} == True
+  espressif/esp_tinyusb:
+    version: "3.0.0"
+    rules:
+      - if: $CONFIG{CANDIS_USB_DEVICE} == True
+  espressif/usb:
+    version: "1.6.0"
+    public: true
+    rules:
+      - if: $CONFIG{CANDIS_USB_HOST} == True

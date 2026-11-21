@@ -1,9 +1,12 @@
 <div align="center">
   <h1>Candis BSP</h1>
   <p><strong>ESP-IDF board support for Candis</strong></p>
-  <p>ESP32-S31 &nbsp;·&nbsp; 2.14-inch 480 × 480 AMOLED touchscreen &nbsp;·&nbsp; Dock and Gamepad expansion</p>
+  <p>ESP32-S31 &nbsp;·&nbsp; 2.14-inch 480 × 480 AMOLED touchscreen &nbsp;·&nbsp; Candis Dock expansion</p>
   <p>
     <a href="https://github.com/jlclab-io/candis-bsp/actions/workflows/ci.yml"><img alt="ESP-IDF build" src="https://github.com/jlclab-io/candis-bsp/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+    <a href="components/candis/idf_component.yml"><img alt="Target ESP32-S31" src="https://img.shields.io/badge/Target-ESP32--S31-00979D"></a>
+    <a href="https://github.com/espressif/esp-idf/commit/2b10d1278a547f5dc92efbe516144b4ae85f80cb"><img alt="ESP-IDF 6.2.x" src="https://img.shields.io/badge/ESP--IDF-6.2.x-E7352C"></a>
+    <a href="LICENSE"><img alt="License Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-blue"></a>
   </p>
   <p>
     <a href="#quick-start"><strong>Quick start</strong></a> ·
@@ -44,7 +47,7 @@ dependencies:
     version: "<commit-or-tag>"
 ```
 
-For a sibling local checkout, use the manifest-relative `path: ../../candis-bsp/components/candis`. Include `bsp/esp-bsp.h` and call `bsp_display_start()` to run LVGL. The [API guide](docs/en/api.md#display-and-touch) has a complete example.
+For a sibling local checkout, use the manifest-relative `path: ../../candis-bsp/components/candis`. Include `bsp/esp-bsp.h`, start LVGL with `bsp_display_start()`, and turn on brightness with `bsp_display_backlight_on()`. See the [API guide](docs/en/api.md#display-and-touch).
 
 </details>
 
@@ -54,16 +57,16 @@ For a sibling local checkout, use the manifest-relative `path: ../../candis-bsp/
 | --- | --- | --- |
 | **Candis** | 1.2 | Core board with AMOLED, touch, RTC, and USB-C |
 | **Candis Dock** | 1.1, 1.2 | TF (microSD), speaker connector, and two expansion headers |
-| **Candis Gamepad** | 1.0 | Joystick, buttons, and rotary encoder |
 
 Power off before fitting a baseboard. Connect one baseboard at a time across both board-to-board connectors. [Hardware and power](docs/en/hardware.md) · [Expansion and EEPROM](docs/en/expansion.md)
 
 ## Examples
 
+- [**Minimal**](examples/candis_minimal) exercises I²C ownership and release recovery without LVGL.
 - [**Display**](examples/display) brings up the AMOLED and LVGL touch UI.
 - [**Audio recorder**](examples/audio/README.md) and [**music player**](examples/music_player/README.md) demo stereo recording and playback.
-- [**Camera**](examples/camera) previews and captures frames from an OV5640.
-- [**Dock**](examples/dock/README.md) and [**expansion**](examples/expansion) exercise microSD and Gamepad input.
+- [**Camera**](examples/camera) previews and captures frames from an OV5640 module.
+- [**Dock**](examples/dock/README.md) and [**expansion**](examples/expansion) exercise microSD and module discovery.
 
 [Browse all examples →](docs/en/examples.md)
 
@@ -73,7 +76,6 @@ Power off before fitting a baseboard. Connect one baseboard at a time across bot
 - [`tg28-esp`](components/tg28-esp/README.md) is the standalone TG28-ESP power management driver.
 - [`candis-camera`](components/candis-camera/README.md) provides configurable OV5640 DVP capture.
 - [`candis_dock`](components/candis_dock/README.md) manages Dock identification, TF cards, and speaker routing.
-- [`candis_gamepad`](components/candis_gamepad/README.md) reads joystick axes, buttons, and the encoder.
 
 The BSP is in development preview. See [component support](docs/en/component-coverage.md) for hardware coverage.
 

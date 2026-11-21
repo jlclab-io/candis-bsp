@@ -1,5 +1,12 @@
 menu "Candis BSP"
 
+config CANDIS_NO_GRAPHIC_LIB
+    bool "Build the raw AMOLED and touch APIs without LVGL"
+    default n
+    help
+        Keep the native QSPI panel and CST9220 APIs. Do not build the LVGL
+        task or pull LVGL and esp_lvgl_port into this application.
+
 config CANDIS_AUDIO
     bool "Build the Candis ES8389 audio interface"
     default n
@@ -8,5 +15,23 @@ config CANDIS_AUDIO
 config CANDIS_IMU
     bool "Build the Candis expansion BMI270 interface"
     default n
+
+config BSP_SD_MOUNT_POINT
+    string "Default BSP TF mount point"
+    default "/sdcard"
+
+config CANDIS_USB_DEVICE
+    bool "Build native OTG CDC device support"
+    depends on !ESP_CONSOLE_USB_CDC
+    default n
+    select TINYUSB_CDC_ENABLED
+
+config CANDIS_USB_HOST
+    bool "Build native OTG host support"
+    depends on !ESP_CONSOLE_USB_CDC
+    default n
+    help
+        Use only in a verified USB-C source setup. Candis hardware controls
+        the VBUS source and the output current limit.
 
 endmenu

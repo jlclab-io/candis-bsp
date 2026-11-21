@@ -182,12 +182,13 @@ class RtcDriverTest(unittest.TestCase):
             (root / "freertos/FreeRTOS.h").write_text("#define pdMS_TO_TICKS(ms) (ms)\n")
             (root / "freertos/task.h").write_text("static inline void vTaskDelay(int ticks) { (void)ticks; }\n")
             driver = root / "candis_rtc.c"
-            shutil.copyfile(COMPONENT / driver.name, driver)
+            shutil.copyfile(COMPONENT / "src" / driver.name, driver)
             source = root / "test_rtc.c"
             source.write_text(TEST_SOURCE)
             idf = Path(os.environ["IDF_PATH"])
             executable = root / "test_rtc"
-            subprocess.run(["cc", "-std=c11", "-Wall", "-Werror", f"-I{root}", f"-I{COMPONENT}", f"-I{COMPONENT / 'include'}",
+            subprocess.run(["cc", "-std=c11", "-Wall", "-Werror", f"-I{root}", f"-I{COMPONENT}",
+                            f"-I{COMPONENT / 'priv_include'}", f"-I{COMPONENT / 'include'}",
                             f"-I{idf / 'components/esp_common/include'}", str(driver), str(source),
                             "-o", str(executable)], check=True)
             subprocess.run([str(executable)], check=True)

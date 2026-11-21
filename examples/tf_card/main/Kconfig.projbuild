@@ -2,18 +2,20 @@ menu "Candis TF card example"
 
 choice CANDIS_TF_BOARD
     prompt "TF card connector"
-    default CANDIS_TF_FIXTURE
+    default CANDIS_TF_EXPANSION
 
 config CANDIS_TF_FIXTURE
     bool "Validation fixture (GPIO35 card detect)"
 
 config CANDIS_TF_EXPANSION
-    bool "Dock or Gamepad (GPIO39 card detect)"
+    bool "Candis Dock (GPIO39 card detect)"
+    help
+        Keep LEFT U6 empty or leave its GPIO39 connection high impedance.
 
 endchoice
 
 config CANDIS_TF_MANAGE_POWER
-    bool "Enable DC1SW for the attached fixture"
+    bool "Enable DC1SW for the attached baseboard"
     help
         Only enable for an expansion domain with known loads. The example
         holds DC1SW until Q is received on the console.

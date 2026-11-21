@@ -18,16 +18,22 @@ extern "C" {
 esp_err_t candis_audio_open(bool manage_power);
 /** Set playback level, 0–100, with a -6 dB codec ceiling. Zero disables the amplifier. */
 esp_err_t candis_audio_set_volume(unsigned volume);
+/** Mute the codec and turn off the amplifiers. Unmuting keeps the amplifiers off.
+ * Queue silence and call candis_audio_set_output(true) before resuming playback. */
+esp_err_t candis_audio_set_mute(bool mute);
 /** Enable or disable the amplifier. Write silence before enabling or disabling. */
 esp_err_t candis_audio_set_output(bool on);
-/** PCM calls report actual frames even if the supplied timeout expires. */
+/** PCM calls report actual frames even if the supplied timeout expires.
+ * One RX task and one TX task may run together. Concurrent calls on the same
+ * direction and calls during teardown return ESP_ERR_INVALID_STATE. */
 esp_err_t candis_audio_read(int16_t *pcm, size_t frames, size_t *received, uint32_t timeout_ms);
 esp_err_t candis_audio_write(const int16_t *pcm, size_t frames, size_t *sent, uint32_t timeout_ms);
 /** Write up to 240 frames with up to 4x digital gain and a 25000 peak limit.
  * Fade the source at clip boundaries in the app. Use one TX writer per session.
  */
 esp_err_t candis_audio_playback_write(const int16_t *pcm, size_t frames, size_t *sent, uint32_t timeout_ms);
-/** Quiesce PCM readers and writers before closing. Serialize control calls in the app. */
+/** Quiesce readers and writers before closing. Returns ESP_ERR_INVALID_STATE
+ * while an operation is in flight. Use from task context. */
 esp_err_t candis_audio_close(void);
 
 #ifdef __cplusplus

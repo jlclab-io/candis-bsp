@@ -30,7 +30,7 @@ def seal(image):
     return image
 
 
-def descriptor(kind=0x30, board=1, revision=0x0100):
+def descriptor(kind=0x31, board=2, revision=0x0102):
     image = bytearray(SIZE)
     image[:4] = b"ESP" + bytes([kind])
     struct.pack_into("<4H", image, 4, board, revision, 0x0100, 0xCA4E)
@@ -55,7 +55,7 @@ class BaseboardTest(unittest.TestCase):
         subprocess.run(["cc", "-shared", "-fPIC", "-Wall", "-Werror",
                         f"-I{work.name}",
                         f"-I{COMPONENT / 'include'}", f"-I{idf / 'components/esp_common/include'}",
-                        str(COMPONENT / "candis_baseboard.c"), "-o", str(library)], check=True)
+                        str(COMPONENT / "src/candis_baseboard.c"), "-o", str(library)], check=True)
         cls.lib = ctypes.CDLL(str(library))
         cls.lib.candis_baseboard_decode.argtypes = (ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(BoardInfo))
         cls.lib.candis_baseboard_decode.restype = ctypes.c_int
@@ -68,11 +68,11 @@ class BaseboardTest(unittest.TestCase):
         return result, info
 
     def test_approved_hardware(self):
-        for code, board, revision, kind in ((0x30, 1, 0x100, 1), (0x31, 2, 0x101, 2), (0x31, 2, 0x102, 2)):
-            with self.subTest(code=code, revision=revision):
-                result, info = self.decode(descriptor(code, board, revision))
+        for revision in (0x0101, 0x0102):
+            with self.subTest(revision=revision):
+                result, info = self.decode(descriptor(revision=revision))
                 self.assertEqual(result, OK)
-                self.assertEqual((info.kind, info.revision, info.format), (kind, revision, 1))
+                self.assertEqual((info.kind, info.revision, info.format), (2, revision, 1))
                 self.assertEqual(info.name, b"!" * 32)
 
     def test_invalid_crc_by_section(self):
@@ -85,7 +85,7 @@ class BaseboardTest(unittest.TestCase):
     def test_invalid_format_or_identity(self):
         self.assertEqual(self.decode(descriptor()[:-1])[0], INVALID_SIZE)
         self.assertEqual(self.decode(bytes(SIZE))[0], INVALID_RESPONSE)
-        self.assertEqual(self.decode(descriptor(revision=0x101))[0], NOT_SUPPORTED)
+        self.assertEqual(self.decode(descriptor(0x30, 1, 0x0100))[0], NOT_SUPPORTED)
         self.assertEqual(self.decode(descriptor(0x31, 2, 0x103))[0], NOT_SUPPORTED)
         for offset in (0x08, 0x0A, 0x0D, 0x40):
             with self.subTest(offset=offset):

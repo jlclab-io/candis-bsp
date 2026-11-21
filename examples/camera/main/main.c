@@ -299,6 +299,10 @@ static esp_err_t run_preview(uint16_t *pixels)
 void app_main(void)
 {
     ESP_ERROR_CHECK_WITHOUT_ABORT(candis_example_usb_start(CANDIS_EXAMPLE_USB_CONSOLE, true));
+#ifndef CONFIG_CANDIS_CAMERA_FIXTURE
+    ESP_LOGI(TAG, "Use sdkconfig.fixture with the Candis validation fixture to start the camera");
+    return;
+#endif
     if (!candis_example_usb_begin_interruptible_operation()) {
         return;
     }

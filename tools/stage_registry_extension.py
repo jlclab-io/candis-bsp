@@ -13,7 +13,6 @@ import yaml
 LOCAL_DEPENDENCIES = {
     "candis": "tg28-esp",
     "candis_dock": "candis",
-    "candis_gamepad": "candis",
 }
 COMPONENTS = Path(__file__).resolve().parents[1] / "components"
 

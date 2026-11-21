@@ -205,17 +205,17 @@ static esp_err_t stop_locked(void)
     s_sequence = (candis_usb_download_sequence_t){0};
     portEXIT_CRITICAL(&s_line_lock);
 #endif
-    if (s_cdc) {
-        if (tud_cdc_n_connected(PORT)) {
-            (void)send_pending_output();
-            (void)tinyusb_cdcacm_write_flush(PORT, pdMS_TO_TICKS(20));
-        }
-        ESP_RETURN_ON_ERROR(tinyusb_cdcacm_deinit(PORT), TAG, "release CDC");
-        s_cdc = false;
+    if (s_driver && s_cdc && tud_cdc_n_connected(PORT)) {
+        (void)send_pending_output();
+        (void)tinyusb_cdcacm_write_flush(PORT, pdMS_TO_TICKS(20));
     }
     if (s_driver) {
         ESP_RETURN_ON_ERROR(tinyusb_driver_uninstall(), TAG, "release USB OTG device");
         s_driver = false;
+    }
+    if (s_cdc) {
+        ESP_RETURN_ON_ERROR(tinyusb_cdcacm_deinit(PORT), TAG, "release CDC");
+        s_cdc = false;
     }
     xSemaphoreTake(s_log_lock, portMAX_DELAY);
     RingbufHandle_t output = s_output;

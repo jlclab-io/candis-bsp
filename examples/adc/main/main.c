@@ -9,10 +9,10 @@
 #include "freertos/task.h"
 
 static const char *TAG = "candis_adc";
-#ifdef CONFIG_CANDIS_ADC_GAMEPAD
-static const int PINS[] = {42, 43};
-#else
+#ifdef CONFIG_CANDIS_ADC_FIXTURE
 static const int PINS[] = {43, 44};
+#else
+static const int PINS[] = {42, 43}; /* Dock LEFT U6.20 and U6.18. */
 #endif
 enum { CHANNELS = sizeof(PINS) / sizeof(PINS[0]), SAMPLES = 16, REPORTS = 12 };
 

@@ -2,13 +2,13 @@ menu "Candis ADC example"
 
 choice CANDIS_ADC_CONNECTOR
     prompt "ADC input pair"
-    default CANDIS_ADC_FIXTURE
+    default CANDIS_ADC_DOCK
+
+config CANDIS_ADC_DOCK
+    bool "External analog inputs on Dock LEFT (U6.20/GPIO42 and U6.18/GPIO43)"
 
 config CANDIS_ADC_FIXTURE
     bool "Validation fixture joystick (GPIO43 and GPIO44)"
-
-config CANDIS_ADC_GAMEPAD
-    bool "Gamepad joystick or external analog input (GPIO42 and GPIO43)"
 
 endchoice
 

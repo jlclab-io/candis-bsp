@@ -1,5 +1,15 @@
 menu "Candis camera preview"
 
+config CANDIS_CAMERA_FIXTURE
+    bool "Use the OV5640 wiring of the Candis validation fixture"
+    default n
+    help
+        Only enable with the validation fixture physically attached.
+        The fixture drives GPIO39 as camera reset. Candis Dock uses that
+        pin for TF card detect.
+
+if CANDIS_CAMERA_FIXTURE
+
 config CANDIS_CAMERA_MANAGE_PANEL_POWER
     bool "Allow the example to enable the AMOLED rail"
     default n
@@ -50,5 +60,7 @@ config CANDIS_CAMERA_CONTROL_CONSOLE
     help
         Read short commands from USB Serial/JTAG between frames without
         blocking the capture task on console input.
+
+endif
 
 endmenu

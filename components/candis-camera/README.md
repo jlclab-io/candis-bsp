@@ -4,29 +4,19 @@ Configurable 8-bit DVP capture for ESP32-S31 and ESP-IDF 6.2. The component uses
 
 ## Preview and stills
 
-Build the [camera example](https://github.com/jlclab-io/candis-bsp/tree/main/examples/camera) from the repository root.
+Use the [camera example](https://github.com/jlclab-io/candis-bsp/tree/main/examples/camera) to build the OV5640 wiring profile for your hardware. The example shows an 800 × 600 RGB565 feed cropped to the 480 × 480 AMOLED. Connect the OV5640, panel, and supply ALDO1.
 
-```sh
-idf.py --preview -C examples/camera build
-```
-
-The default build uses the Candis camera fixture and shows an 800 × 600 RGB565 feed cropped to the 480 × 480 AMOLED. Connect the OV5640 and panel and supply ALDO1. The fixture camera profile assigns GPIO39/40 to reset and power-down, GPIO46–57 to DVP and XCLK, and BLDO1, ALDO4, and ALDO3 to camera supplies. The fixture power-down pin uses open drain with a pull-up to sensor DOVDD. On other boards these pins and rails may have different uses.
+For hardware with GPIO39/40 for reset and power-down, GPIO46–57 for DVP and XCLK, and BLDO1, ALDO4, ALDO3 for camera supplies, use the provided `sdkconfig.fixture` profile. The power-down pin uses open drain with a pull-up to sensor DOVDD. Do not enable this profile on Dock, where GPIO39 is wired to TF card detect.
 
 | Build profile | Use |
 | --- | --- |
 | `sdkconfig.still` | Display a single captured frame |
-| `sdkconfig.jpeg` | Save a still to a FAT-formatted TF card with the fixture's GPIO35 card-detect wiring and powered DC1SW |
+| `sdkconfig.jpeg` | Save a still to a FAT-formatted TF card with the GPIO35 card-detect wiring and powered DC1SW |
 | `sdkconfig.controls` | Adjust sensor settings from the serial console during preview |
 | `sdkconfig.manual` | Apply manual settings before preview or capture |
 | `sdkconfig.uyvy` / `sdkconfig.yuyv` | Select UYVY with software conversion or YUYV with DVP hardware conversion. Verify format and color on the actual assembly |
 
-To use a profile, add it after `sdkconfig.defaults` in `SDKCONFIG_DEFAULTS`. Use a new build directory and `SDKCONFIG` file for each variant. The JPEG profile, for example, can be built with:
-
-```sh
-idf.py --preview -C examples/camera -B "$PWD/build/camera-jpeg" \
-  -D "SDKCONFIG=$PWD/build/camera-jpeg/sdkconfig" \
-  -D 'SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.jpeg' build
-```
+Add a profile after `sdkconfig.fixture` in `SDKCONFIG_DEFAULTS` to customize behavior. Use a separate build directory and `SDKCONFIG` file for each variant.
 
 ## Capture API
 

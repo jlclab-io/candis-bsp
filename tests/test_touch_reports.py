@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 
-DISPLAY = Path(__file__).resolve().parents[1] / "components/candis/candis_display.c"
+DISPLAY = Path(__file__).resolve().parents[1] / "components/candis/src/candis_display.c"
 
 STUBS = r"""
 #include <assert.h>
@@ -27,6 +27,7 @@ typedef candis_touch_point_t esp_lcd_touch_point_data_t;
 static atomic_bool s_touch_pending;
 static struct {
     esp_lcd_touch_handle_t touch;
+    bool sleeping;
     uint8_t point_count;
     uint8_t touch_read_failures;
     candis_touch_point_t points[TOUCH_POINTS];

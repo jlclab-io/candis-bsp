@@ -53,6 +53,12 @@ static esp_err_t read_samples(void)
 }
 
 #ifdef CONFIG_CANDIS_MOTION_TEST_STORAGE
+#ifdef CONFIG_CANDIS_MOTION_FIXTURE
+static const candis_storage_profile_t STORAGE_PROFILE = CANDIS_STORAGE_FIXTURE;
+#else
+static const candis_storage_profile_t STORAGE_PROFILE = CANDIS_STORAGE_EXPANSION;
+#endif
+
 static esp_err_t check_dc1sw(bool expected)
 {
     candis_power_state_t power;
@@ -64,7 +70,7 @@ static esp_err_t check_dc1sw(bool expected)
 static esp_err_t storage_first(bool manage, bool initial)
 {
     sdmmc_card_t *card;
-    ESP_RETURN_ON_ERROR(candis_storage_mount("/card", CANDIS_STORAGE_FIXTURE, manage, &card), TAG, "mount fixture TF");
+    ESP_RETURN_ON_ERROR(candis_storage_mount("/card", STORAGE_PROFILE, manage, &card), TAG, "mount TF");
     esp_err_t result = candis_imu_start(false);
     esp_err_t unmount = candis_storage_unmount();
     if (result == ESP_OK) {
@@ -81,9 +87,9 @@ static esp_err_t storage_first(bool manage, bool initial)
 
 static esp_err_t imu_first(bool manage, bool initial)
 {
-    ESP_RETURN_ON_ERROR(candis_imu_start(manage), TAG, "start fixture IMU");
+    ESP_RETURN_ON_ERROR(candis_imu_start(manage), TAG, "start IMU");
     sdmmc_card_t *card;
-    esp_err_t result = candis_storage_mount("/card", CANDIS_STORAGE_FIXTURE, false, &card);
+    esp_err_t result = candis_storage_mount("/card", STORAGE_PROFILE, false, &card);
     esp_err_t stop = candis_imu_stop();
     if (result == ESP_OK) {
         result = stop == ESP_OK ? check_dc1sw(true) : stop;
@@ -94,7 +100,7 @@ static esp_err_t imu_first(bool manage, bool initial)
     }
     esp_err_t unmount = candis_storage_unmount();
     ESP_RETURN_ON_ERROR(result, TAG, "IMU released before TF");
-    ESP_RETURN_ON_ERROR(unmount, TAG, "unmount fixture TF");
+    ESP_RETURN_ON_ERROR(unmount, TAG, "unmount TF");
     return check_dc1sw(initial);
 }
 #endif

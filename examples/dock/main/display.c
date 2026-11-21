@@ -58,7 +58,8 @@ static lv_obj_t *make_shape(lv_obj_t *parent, int width, int height, uint32_t rg
 {
     lv_obj_t *shape = lv_obj_create(parent);
     lv_obj_remove_style_all(shape);
-    lv_obj_remove_flag(shape, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_scrollable(shape, false);
+    lv_obj_set_clickable(shape, false);
     lv_obj_set_size(shape, width, height);
     lv_obj_set_style_bg_color(shape, lv_color_hex(rgb), 0);
     lv_obj_set_style_bg_opa(shape, LV_OPA_COVER, 0);
@@ -76,7 +77,7 @@ static esp_err_t setup_display(lv_display_t *display, bool touch)
         return ESP_ERR_NOT_FOUND;
     }
     lv_obj_t *screen = lv_display_get_screen_active(display);
-    lv_obj_remove_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(screen, false);
     s_surface = make_shape(screen, BSP_LCD_H_RES, BSP_LCD_V_RES, 0x090c14);
     lv_obj_t *label = lv_label_create(s_surface);
     lv_obj_set_style_text_color(label, lv_color_hex(0xe2e8f0), 0);

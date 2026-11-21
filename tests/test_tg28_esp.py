@@ -244,8 +244,8 @@ class TG28Test(unittest.TestCase):
             executable = work / "test"
             subprocess.run(
                 ["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", f"-I{work}", f"-I{idf_headers}",
-                 f"-I{COMPONENT / 'include'}", str(source),
-                 *map(str, sorted(COMPONENT.glob("*.c"))), "-o", str(executable)],
+                 f"-I{COMPONENT / 'include'}", f"-I{COMPONENT / 'priv_include'}", str(source),
+                 *map(str, sorted((COMPONENT / "src").glob("*.c"))), "-o", str(executable)],
                 check=True,
             )
             subprocess.run([executable], check=True)

@@ -8,19 +8,20 @@
 
 | 示例 | 演示内容 |
 | --- | --- |
+| [最小应用](../../examples/candis_minimal) | 标准 I²C 启停、共享引用和释放重试。 |
 | [显示](../../examples/display) | ALDO1 上电后体验 LVGL、AMOLED 刷新及触控。 |
 | [录音机](../../examples/audio/README.md) | 用触摸屏录放双声道片段。接好麦克风和扬声器，并为 ALDO1/ALDO2 供电。 |
 | [音乐播放器](../../examples/music_player/README.md) | 播放内置曲目并选择扬声器声道，需要显示和音频供电。 |
 | [摄像头](../../examples/camera) | 在 AMOLED 上预览 OV5640。使用摄像头测试板配置，拍照和 JPEG 选项见[摄像头指南](../../components/candis-camera/README.md)。 |
 | [TF 卡](../../examples/tf_card) | 浏览 FAT 格式卡。按实际板型配置卡检测脚，并为 DC1SW 供电。 |
-| [扩展板](../../examples/expansion) | 识别底板后读取 Gamepad 输入或浏览 Dock 存储。 |
-| [Dock](../../examples/dock/README.md) | 开启 Dock 会话、浏览 TF 卡，并使用显示或扬声器。 |
-| [ADC](../../examples/adc) | 采集两路摇杆轴，可用时输出标定毫伏值。按实物选择综合测试板或 Gamepad 配置。 |
+| [扩展板](../../examples/expansion) | 识别 Dock 后浏览 TF 卡，可选探测模块地址。 |
+| [Dock](../../examples/dock/README.md) | 识别 Dock 并测试 TF 卡、BMI270、显示和扬声器。 |
+| [ADC](../../examples/adc) | 采集两路模拟信号，默认使用 Dock LEFT 扩展座。 |
 | [运动传感](../../examples/motion) | 在扩展域已上电时读取 BMI270 运动数据和温度。 |
 | [RTC](../../examples/rtc) | 读取或设置 UTC，并体验 RTC 更新唤醒。见 [RTC 控制台](#rtc-控制台)。 |
 | [电源](../../examples/power/README.md) | 在 AMOLED 上显示电源与充电遥测，默认配置只读 PMU。 |
 | [TG28 监测](../../examples/tg28/README.md) | 独立应用通过 I²C 读取 TG28-ESP 状态。 |
-| [马达](../../examples/motor/README.md) | 为综合测试板已安装的马达输出短时 PWM 脉冲。 |
+| [马达](../../examples/motor/README.md) | 为 Candis Dock 已安装的 M1 马达输出短时 PWM 脉冲。 |
 
 ## 板级与系统
 
@@ -36,15 +37,14 @@
 
 ## 板型配置
 
-为不同变体使用独立的构建目录和 `SDKCONFIG` 文件。例如 Gamepad 的模拟摇杆在 GPIO42/43，需要 ALDO3 供电，可用下列命令构建。综合测试板的 GPIO43/44 摇杆由 DC1SW 供电，使用 `sdkconfig.fixture`。接入外部模拟信号时，按 ADC 输入范围接线并确保共地。
+| 示例 | 硬件 | GPIO 说明 |
+| --- | --- | --- |
+| TF 卡 | Candis Dock | 卡检测在 GPIO39 |
+| ADC | Candis Dock（LEFT 扩展座） | GPIO42 和 GPIO43 分别在 U6.20 和 U6.18 |
+| 摄像头 | OV5640 模块 | 复位和掉电由[摄像头接线配置](../../components/candis-camera/README.md#custom-wiring)控制 |
+| LED 和马达 | 核心板和 Dock | LED 用 GPIO37，M1 马达用 GPIO5 |
 
-```sh
-idf.py --preview -C examples/adc -B "$PWD/build/adc-gamepad" \
-  -D "SDKCONFIG=$PWD/build/adc-gamepad/sdkconfig" \
-  -D 'SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.gamepad' build
-```
-
-使用 TF 卡示例时，Dock 和 Gamepad 选择 GPIO39，综合测试板选择 GPIO35。Dock U6 保持空置，或确认其 GPIO39 保持高阻。浏览目录时使用 FAT 格式卡。
+使用 Dock TF 卡时，保持 LEFT U6 空置，或使其 GPIO39 线路保持高阻。使用 FAT 格式卡。使用核心板 LED 前，确保 U6.8 上的 GPIO37 可用。外接 ADC 信号须与板卡共地，并符合 0 dB 衰减档位的输入范围。
 
 ## RTC 控制台
 

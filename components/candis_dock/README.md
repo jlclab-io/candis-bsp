@@ -18,6 +18,8 @@ Use both BTB connectors. Release UART0 before claiming GPIO58/59, and leave U6 e
 
 Add a dependency on `components/candis_dock` and include [`bsp/candis_dock.h`](include/bsp/candis_dock.h). Use one control task for the Dock session.
 
+Call `candis_dock_get_state()` after the expansion rail is available to distinguish an absent Dock, a recognized but unopened Dock, and an initialized Dock session. `candis_dock_open()` owns the component's application DC1SW lease.
+
 1. Use `candis_dock_open(false, &identity)` with DC1SW already powered. Opt into managing the rail only after verifying the complete load.
 2. Use `candis_dock_detect_start()` to claim card detection and `candis_dock_mount_with_config()` to choose the mount policy. Use `candis_dock_get_speaker_channel()` to map CN3 to left or right PCM.
 3. Close files, then call `candis_storage_unmount()`, `candis_storage_detect_stop()`, and `candis_dock_close()` for resources acquired during the session. Retry a failed release before removing power.

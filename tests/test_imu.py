@@ -18,8 +18,12 @@ typedef struct { void *bus; int rail; } candis_power_t;
 typedef struct { i2c_master_dev_handle_t i2c_handle; } bmi270_handle_t;
 typedef struct { unsigned addr, interface; void *i2c_bus; } bmi270_driver_config_t;
 typedef struct { unsigned acce_odr, acce_range, gyro_odr, gyro_range; } bmi270_config_t;
+typedef struct { int dev_addr_length, device_address, scl_speed_hz; } i2c_device_config_t;
 enum {
     CANDIS_RAIL_EXPANSION, CANDIS_IMU_ADDR = 0x68, BMI270_USE_I2C = 0,
+    I2C_ADDR_BIT_LEN_7 = 7, BMI270_CHIP_ID = 0x24,
+    BMI270_ACC_ODR_25_HZ = 6, BMI270_GYR_ODR_25_HZ = 6,
+    BMI270_ACC_RANGE_2_G = 0, BMI270_GYR_RANGE_2000_DPS = 0,
     BMI270_ACC_ODR_100_HZ = 8, BMI270_ACC_RANGE_4_G = 1,
     BMI270_GYR_ODR_100_HZ = 8, BMI270_GYR_RANGE_1000_DPS = 1,
 };
@@ -31,10 +35,15 @@ esp_err_t bmi270_create(const bmi270_driver_config_t *cfg, bmi270_handle_t **dev
 esp_err_t bmi270_start(bmi270_handle_t *dev, const bmi270_config_t *cfg);
 esp_err_t bmi270_stop(const bmi270_handle_t *dev);
 esp_err_t bmi270_delete(bmi270_handle_t *dev);
+esp_err_t i2c_master_probe(void *bus, uint8_t address, int timeout);
+esp_err_t i2c_master_bus_add_device(void *bus, const i2c_device_config_t *cfg, i2c_master_dev_handle_t *dev);
 esp_err_t i2c_master_bus_rm_device(i2c_master_dev_handle_t dev);
+esp_err_t i2c_master_transmit(i2c_master_dev_handle_t dev, const uint8_t *data, size_t len, int timeout);
 esp_err_t i2c_master_transmit_receive(i2c_master_dev_handle_t dev, const uint8_t *reg, size_t reg_len,
                                     uint8_t *data, size_t count, int timeout);
 int64_t esp_timer_get_time(void);
+void vTaskDelay(unsigned ticks);
+#define pdMS_TO_TICKS(ms) (ms)
 #define ESP_RETURN_ON_ERROR(call, tag, ...) do { (void)(tag); \
     esp_err_t error = (call); if (error != ESP_OK) return error; } while (0)
 #define ESP_RETURN_ON_FALSE(condition, error, tag, ...) do { (void)(tag); \
@@ -51,6 +60,9 @@ SOURCE = r"""
 
 static int device;
 static bool locked, measuring, attached, removal_failure, read_failure;
+static bool present = true, data_ready = true;
+static uint8_t chip_id = BMI270_CHIP_ID, power_config;
+static unsigned accel_setting = BMI270_ACC_RANGE_4_G, gyro_setting = BMI270_GYR_RANGE_1000_DPS;
 static unsigned reads, stops, releases;
 static uint16_t temperature = 0x8000;
 static bmi270_handle_t handle = {.i2c_handle = &device};
@@ -70,14 +82,19 @@ void candis_control_leave(void)
 
 esp_err_t candis_power_acquire(candis_power_t *lease, bool manage, unsigned settle)
 {
-    assert(locked && !lease->bus && manage && settle == 20);
+    assert(locked && !lease->bus);
+    assert((manage && settle == 20) || (!manage && settle == 0));
     lease->bus = &device;
     return ESP_OK;
 }
 
 esp_err_t candis_power_release(candis_power_t *lease)
 {
-    assert(locked && !attached && lease->bus == &device);
+    assert(locked && !attached);
+    if (!lease->bus) {
+        return ESP_OK;
+    }
+    assert(lease->bus == &device);
     lease->bus = NULL;
     ++releases;
     return ESP_OK;
@@ -94,7 +111,7 @@ esp_err_t bmi270_create(const bmi270_driver_config_t *cfg, bmi270_handle_t **dev
 esp_err_t bmi270_start(bmi270_handle_t *dev, const bmi270_config_t *cfg)
 {
     assert(locked && attached && dev == &handle && cfg->acce_odr == cfg->gyro_odr);
-    assert(cfg->acce_range == BMI270_ACC_RANGE_4_G && cfg->gyro_range == BMI270_GYR_RANGE_1000_DPS);
+    assert(cfg->acce_range == accel_setting && cfg->gyro_range == gyro_setting && !(power_config & 1));
     measuring = true;
     return ESP_OK;
 }
@@ -113,6 +130,20 @@ esp_err_t bmi270_delete(bmi270_handle_t *dev)
     return i2c_master_bus_rm_device(dev->i2c_handle);
 }
 
+esp_err_t i2c_master_probe(void *bus, uint8_t addr, int timeout)
+{
+    assert(locked && bus == &device && addr == CANDIS_IMU_ADDR && timeout == 100);
+    return present ? ESP_OK : ESP_ERR_NOT_FOUND;
+}
+
+esp_err_t i2c_master_bus_add_device(void *bus, const i2c_device_config_t *cfg, i2c_master_dev_handle_t *dev)
+{
+    assert(locked && !attached && bus == &device && cfg->device_address == CANDIS_IMU_ADDR);
+    attached = true;
+    *dev = &device;
+    return ESP_OK;
+}
+
 esp_err_t i2c_master_bus_rm_device(i2c_master_dev_handle_t dev)
 {
     assert(locked && !measuring && attached && dev == &device);
@@ -123,10 +154,22 @@ esp_err_t i2c_master_bus_rm_device(i2c_master_dev_handle_t dev)
     return ESP_OK;
 }
 
+esp_err_t i2c_master_transmit(i2c_master_dev_handle_t dev, const uint8_t *data, size_t len, int timeout)
+{
+    assert(locked && dev == &device && attached && !measuring && len == 2 && data[0] == 0x7c && timeout == 100);
+    power_config = data[1];
+    return ESP_OK;
+}
+
 esp_err_t i2c_master_transmit_receive(i2c_master_dev_handle_t dev, const uint8_t *reg, size_t reg_len,
                                     uint8_t *data, size_t count, int timeout)
 {
     assert(locked && dev == &device && attached && reg_len == 1 && timeout == 100);
+    if (*reg == 0x00 || *reg == 0x7c || *reg == 0x03) {
+        assert(count == 1);
+        data[0] = *reg == 0x00 ? chip_id : *reg == 0x7c ? power_config : data_ready ? 0xc0 : 0;
+        return ESP_OK;
+    }
     if (*reg == 0x53) {
         assert(count == 1 && !measuring);
         data[0] = 0;
@@ -150,8 +193,12 @@ esp_err_t i2c_master_transmit_receive(i2c_master_dev_handle_t dev, const uint8_t
 
 int64_t esp_timer_get_time(void)
 {
-    assert(reads == 1);
-    return INT64_C(10000);
+    return INT64_C(10000) * reads;
+}
+
+void vTaskDelay(unsigned ticks)
+{
+    assert(locked && ticks == 11);
 }
 
 int main(void)
@@ -180,6 +227,40 @@ int main(void)
     assert(candis_imu_start(true) == ESP_ERR_INVALID_STATE);
     removal_failure = false;
     assert(candis_imu_stop() == ESP_OK && !attached && releases == 1 && stops == 1);
+
+    candis_capability_state_t state;
+    present = false;
+    assert(candis_imu_get_state(&state) == ESP_OK && state == CANDIS_CAPABILITY_NOT_PRESENT);
+    assert(candis_imu_start(true) == ESP_ERR_NOT_FOUND && !attached);
+    present = true;
+    chip_id = 0x13;
+    assert(candis_imu_get_state(&state) == ESP_OK && state == CANDIS_CAPABILITY_UNSUPPORTED);
+    chip_id = BMI270_CHIP_ID;
+    assert(candis_imu_get_state(&state) == ESP_OK && state == CANDIS_CAPABILITY_PRESENT);
+
+    candis_imu_config_t config = CANDIS_IMU_CONFIG_DEFAULT();
+    config.manage_power = true;
+    config.sample_rate_hz = 63;
+    assert(candis_imu_start_with_config(&config) == ESP_ERR_INVALID_ARG && !attached);
+    config.sample_rate_hz = 200;
+    config.accel_range_g = 8;
+    config.gyro_range_dps = 2000;
+    accel_setting = 2;
+    gyro_setting = 0;
+    data_ready = false;
+    read_failure = false;
+    power_config = 0x02;
+    assert(candis_imu_start_with_config(&config) == ESP_OK);
+    assert(candis_imu_read(&sample) == ESP_ERR_NOT_FINISHED && reads == 2);
+    assert(candis_imu_suspend() == ESP_OK && power_config == 3 && attached && !measuring);
+    assert(candis_imu_get_state(&state) == ESP_OK && state == CANDIS_CAPABILITY_INITIALIZED);
+    assert(candis_imu_read(&sample) == ESP_ERR_INVALID_STATE && reads == 2);
+    assert(candis_imu_resume() == ESP_OK && power_config == 2 && measuring);
+    data_ready = true;
+    assert(candis_imu_read(&sample) == ESP_OK && sample.acceleration_g[0] == -8);
+    assert(sample.angular_velocity_dps[0] == 1000);
+    assert(candis_imu_stop() == ESP_OK && !attached);
+    assert(candis_imu_stop() == ESP_OK && !attached);
 }
 """
 
@@ -190,12 +271,15 @@ class ImuTest(unittest.TestCase):
         idf = Path(os.environ["IDF_PATH"]) / "components/esp_common/include"
         with TemporaryDirectory() as temp:
             root = Path(temp)
-            (root / "sdkconfig.h").touch()
+            (root / "sdkconfig.h").write_text("#define CONFIG_CANDIS_IMU 1\n")
             (root / "stub.h").write_text(STUB)
             for name in ("bmi270.h", "candis_internal.h", "esp_check.h", "esp_timer.h"):
                 (root / name).write_text('#include "stub.h"\n')
+            (root / "freertos").mkdir()
+            for name in ("FreeRTOS.h", "task.h"):
+                (root / "freertos" / name).write_text('#include "stub.h"\n')
             driver = root / "candis_imu.c"
-            shutil.copyfile(component / driver.name, driver)
+            shutil.copyfile(component / "src" / driver.name, driver)
             test = root / "test.c"
             test.write_text(SOURCE)
             binary = root / "test"

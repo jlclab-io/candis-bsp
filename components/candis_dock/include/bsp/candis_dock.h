@@ -15,11 +15,16 @@ extern "C" {
  */
 esp_err_t candis_dock_probe(candis_baseboard_info_t *identity);
 
-/** Hold the BSP's application DC1SW lease and identify the Dock. Set manage_power
+/** Classify the Dock as absent, present, or initialized.
+ * The probe path requires the expansion rail and UART0 handover described
+ * for candis_dock_probe(). */
+esp_err_t candis_dock_get_state(candis_capability_state_t *state, candis_baseboard_info_t *identity);
+
+/** Hold a private DC1SW lease and identify the Dock. Set manage_power
  * only after checking the total attached load (TF, IMU, EEPROM and modules).
  * The GPIO58/59 requirements of candis_dock_probe() apply.
- * While using this lifecycle, reserve candis_expansion_power_acquire()/release()
- * for this component. BSP resources with their own DC1SW leases can coexist.
+ * Other DC1SW clients retain their leases when the Dock session closes.
+ * A second open returns ESP_ERR_INVALID_STATE while the first session exists.
  */
 esp_err_t candis_dock_open(bool manage_power, candis_baseboard_info_t *identity);
 

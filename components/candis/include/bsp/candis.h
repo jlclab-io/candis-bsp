@@ -5,16 +5,25 @@
 #include <stdint.h>
 #include "driver/i2c_master.h"
 #include "esp_err.h"
-#include "lvgl.h"
+#include "bsp/display.h"
+#include "bsp/touch.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define BSP_LCD_H_RES 480
-#define BSP_LCD_V_RES 480
+#define BSP_I2C_NUM I2C_NUM_0
 #define BSP_I2C_SCL GPIO_NUM_6
 #define BSP_I2C_SDA GPIO_NUM_7
+
+/** Acquire the ESP-BSP bus reference. Repeated initialization is idempotent.
+ * @note Use from task context. Lifecycle calls may return ESP_ERR_INVALID_STATE
+ *       during another board operation. Retry from the control task. */
+esp_err_t bsp_i2c_init(void);
+/** Remove application devices before releasing the ESP-BSP bus reference. */
+esp_err_t bsp_i2c_deinit(void);
+/** Acquire the ESP-BSP bus reference on demand and return its borrowed handle. */
+i2c_master_bus_handle_t bsp_i2c_get_handle(void);
 
 /** A successful acquire grants one reference. Remove your I2C devices before release. */
 esp_err_t candis_i2c_acquire(i2c_master_bus_handle_t *bus);
@@ -41,12 +50,6 @@ typedef struct {
 }
 
 typedef struct {
-    uint16_t x;
-    uint16_t y;
-    uint8_t track_id;
-} candis_touch_point_t;
-
-typedef struct {
     uint64_t frames;
     uint64_t pixels;
     uint64_t prepare_us;
@@ -60,8 +63,6 @@ typedef struct {
     uint32_t touch_errors;
 } candis_display_stats_t;
 
-/** Call lifecycle and brightness APIs from a control task outside the LVGL lock. */
-esp_err_t candis_display_start(const candis_display_config_t *config, lv_display_t **display);
 /** Start panel-only mode. Touch and asynchronous LVGL refresh settings are ignored. */
 esp_err_t candis_display_start_raw(const candis_display_config_t *config);
 /** Present a packed, native-endian 480 x 480 RGB565 frame in panel-only mode.
@@ -70,15 +71,14 @@ esp_err_t candis_display_start_raw(const candis_display_config_t *config);
  */
 esp_err_t candis_display_draw_rgb565(const uint16_t *pixels);
 esp_err_t candis_display_stop(void);
-esp_err_t bsp_display_brightness_set(int brightness_percent);
 esp_err_t candis_display_get_stats(candis_display_stats_t *stats);
 
+#if !BSP_CONFIG_NO_GRAPHIC_LIB
+/** Call lifecycle and brightness APIs from a control task outside the LVGL lock. */
+esp_err_t candis_display_start(const candis_display_config_t *config, lv_display_t **display);
 /** Call with the display lock held. Capacity is two contacts. */
 uint8_t candis_display_get_touch_points(candis_touch_point_t points[2]);
-
-lv_display_t *bsp_display_start(void);
-bool bsp_display_lock(uint32_t timeout_ms);
-void bsp_display_unlock(void);
+#endif
 
 #ifdef __cplusplus
 }

@@ -1,11 +1,19 @@
 menu "Candis motion example"
 
 config CANDIS_MOTION_MANAGE_POWER
-    bool "Power the expansion domain for a verified fixture"
+    bool "Power the expansion domain for a verified assembly"
     default n
 
 config CANDIS_MOTION_TEST_STORAGE
-    bool "Run shared-power checks with the fixture's TF card"
+    bool "Run shared-power checks with a TF card"
+    default n
+    help
+        Uses the Dock card detect pin GPIO39 by default. Keep LEFT U6 empty
+        or leave its GPIO39 connection high impedance.
+
+config CANDIS_MOTION_FIXTURE
+    bool "Use the validation fixture card detect pin GPIO35"
+    depends on CANDIS_MOTION_TEST_STORAGE
     default n
 
 endmenu
