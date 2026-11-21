@@ -36,14 +36,14 @@ These offline reference descriptors use magic `CND`, Vendor `0xCA4E`, SW Compati
 | Board Name | Location and address | Type / Product ID | Hardware Revision | Serial Number | TLV and purpose |
 | --- | --- | --- | --- | --- | --- |
 | `candis_bb` | BTB `0x50` | `0x31 / 0x0003` | `0x0100` | `0x00030001` | Length 0, direct baseboard without slots |
-| `candis_dock` | BTB `0x50` | `0x31 / 0x0002` | `0x0102` | `0x00020001` | Length 0, rev. 1.2 profile with right speaker channel and two slots |
+| `candis-dock` | BTB `0x50` | `0x31 / 0x0002` | `0x0102` | `0x00020001` | Length 0, rev. 1.2 profile with right speaker channel and two slots |
 | `candis_joystick` | LEFT `0x51` | `0x32 / 0x0101` | `0x0100` | `0x01010001` | 14 bytes, X 150/1500/2850 mV and Y 160/1550/2900 mV |
 | `candis_sensor` | RIGHT `0x52` | `0x32 / 0x0102` | `0x0100` | `0x01020001` | 4 bytes, 2000 ms interval. The approved firmware profile supplies function address `0x44` |
 
 | Board Name | Identity CRC | Manufacturing CRC | Parameter CRC |
 | --- | --- | --- | --- |
 | `candis_bb` | `0x133A` | `0x00C1` | `0xC619` |
-| `candis_dock` | `0x6527` | `0x00C1` | `0xC619` |
+| `candis-dock` | `0x6527` | `0x00C1` | `0xC619` |
 | `candis_joystick` | `0x35E7` | `0x00C1` | `0x91BF` |
 | `candis_sensor` | `0xFE75` | `0x00C1` | `0xC660` |
 

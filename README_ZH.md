@@ -75,7 +75,7 @@ dependencies:
 - [`candis`](components/candis/README.md) 提供核心板的显示、触控、RTC、电源和外设接口。
 - [`tg28-esp`](components/tg28-esp/README.md) 是独立的 TG28-ESP 电源管理驱动。
 - [`candis-camera`](components/candis-camera/README.md) 提供可配置的 OV5640 DVP 采集。
-- [`candis_dock`](components/candis_dock/README.md) 提供 Dock 识别、TF 卡访问与扬声器声道选择。
+- [`candis-dock`](components/candis-dock/README.md) 提供 Dock 识别、TF 卡访问与扬声器声道选择。
 
 BSP 处于开发预览阶段。硬件支持范围见[组件支持](docs/zh/component-coverage.md)。
 

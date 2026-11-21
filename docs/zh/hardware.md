@@ -19,7 +19,7 @@
 ## 供电
 
 - **显示时序。** BSP 默认采用 80 MHz QSPI。应用若需以 50 MHz 运行，可在 `candis_display_config_t` 中设置 `bench_qspi_80mhz = false`。按实际工况验证所用频率。
-- **音频。** 使用音频示例前接好麦克风和扬声器，并为 ALDO2 供电。Dock 的 PCM 声道按[扬声器接线](../../components/candis_dock/README.md#hardware)选择。
+- **音频。** 使用音频示例前接好麦克风和扬声器，并为 ALDO2 供电。Dock 的 PCM 声道按[扬声器接线](../../components/candis-dock/README.md#hardware)选择。
 - **扩展。** TF 卡、底板 EEPROM、BMI270 和已接入的 Dock 模块共用 DC1SW。启用电源管理前，核对整个供电域的负载与时序。插拔底板或模块前断开全部电源。
 - **USB Host。** USB-C 电路控制接口 VBUS 和限流。停止 Host 会释放数据栈与 PHY。使用 Host 前核对供电方式与外设负载。
 

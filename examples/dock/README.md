@@ -1,6 +1,6 @@
 # Candis Dock example
 
-Use this example with a Candis Dock rev. 1.1 or 1.2 and a stable USB supply. Connect both BTB connectors with power off. Leave the Dock expansion headers empty unless the module loads and shared GPIO have been verified. See the [Dock component](../../components/candis_dock/README.md) for hardware requirements.
+Use this example with a Candis Dock rev. 1.1 or 1.2 and a stable USB supply. Connect both BTB connectors with power off. Leave the Dock expansion headers empty unless the module loads and shared GPIO have been verified. See the [Dock component](../../components/candis-dock/README.md) for hardware requirements.
 
 ```sh
 idf.py --preview -C examples/dock build

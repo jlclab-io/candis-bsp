@@ -20,7 +20,7 @@ The `candis` component targets Candis revision 1.2. The board uses an ESP32-S31 
 
 - **Display.** Use a verified supply on ALDO1 before starting the panel. The BSP leaves the rail unchanged by default. The panel's VDDIO limit is 3.35 V. A nominal 3.3 V ALDO1 with ±3% tolerance can reach 3.399 V before transients. Check the actual rail against the module's limits before permitting software to enable it.
 - **Display timing.** The BSP defaults to 80 MHz QSPI. For a 50 MHz application configuration, set `bench_qspi_80mhz = false` in `candis_display_config_t`. Qualify the chosen speed over your operating conditions.
-- **Audio.** Supply ALDO2 and connect the intended microphones and speakers before using the audio examples. Use the [Dock speaker wiring](../../components/candis_dock/README.md#hardware) to select the correct PCM channel.
+- **Audio.** Supply ALDO2 and connect the intended microphones and speakers before using the audio examples. Use the [Dock speaker wiring](../../components/candis-dock/README.md#hardware) to select the correct PCM channel.
 - **Expansion.** DC1SW is a shared rail for TF, the baseboard EEPROM, BMI270, and attached Dock modules. Check the complete load and power sequence before enabling rail management. Connect or remove baseboards and modules with all supplies disconnected.
 - **USB Host.** The Type-C circuit controls connector VBUS and current limiting. Host stop releases the data stack and PHY. Check the source setup and peripheral load before using Host.
 

@@ -16,7 +16,7 @@ on:
         type: boolean
         default: false
       publish_dock:
-        description: Publish candis_dock to the configured Registry namespace
+        description: Publish candis-dock to the configured Registry namespace
         type: boolean
         default: false
 
@@ -136,7 +136,7 @@ jobs:
         run: |
           source "$RUNNER_TEMP/esp-idf/export.sh"
           namespace="${REGISTRY_NAMESPACE:-candis_ci}"
-          component=candis_dock
+          component=candis-dock
           stage="$RUNNER_TEMP/candis-extensions/$component"
           package="$RUNNER_TEMP/candis-extension-packages/$component"
           python3 tools/stage_registry_extension.py "$component" "$stage" --namespace "$namespace"
@@ -251,9 +251,9 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && !(inputs.publish || inputs.publish_camera || inputs.publish_tg28 || inputs.publish_dock)
         run: |
           source "$RUNNER_TEMP/esp-idf/export.sh"
-          compote component upload --dry-run --project-dir "$RUNNER_TEMP/candis-extensions/candis_dock" \
-            --name candis_dock --commit-sha "$GITHUB_SHA" --repository-path components/candis_dock \
-            --dest-dir "$RUNNER_TEMP/candis_dock-registry-check"
+          compote component upload --dry-run --project-dir "$RUNNER_TEMP/candis-extensions/candis-dock" \
+            --name candis-dock --commit-sha "$GITHUB_SHA" --repository-path components/candis-dock \
+            --dest-dir "$RUNNER_TEMP/candis-dock-registry-check"
       - name: Publish tg28-esp on the ESP Component Registry
         if: github.event_name == 'workflow_dispatch' && inputs.publish_tg28
         env:
@@ -340,7 +340,7 @@ jobs:
           IDF_COMPONENT_API_TOKEN: ${{ secrets.IDF_COMPONENT_API_TOKEN }}
         run: |
           source "$RUNNER_TEMP/esp-idf/export.sh"
-          component=candis_dock
+          component=candis-dock
           stage="$RUNNER_TEMP/candis-extensions/$component"
           consumer="$RUNNER_TEMP/$component-install"
           mkdir -p "$consumer/main"

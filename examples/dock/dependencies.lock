@@ -2,37 +2,55 @@ dependencies:
   candis:
     dependencies:
     - name: idf
-      version: '>=6.2,<6.3'
+      version: '>=6.1,<6.3'
     - name: tg28-esp
       path: ../tg28-esp
     - name: espressif/esp_lcd_touch_cst9220
+      public: true
       version: 0.1.2
     - name: espressif/esp_lvgl_port
+      public: true
+      rules:
+      - if: $CONFIG{CANDIS_NO_GRAPHIC_LIB} == False
       version: 2.9.0
     - name: lvgl/lvgl
       public: true
+      rules:
+      - if: $CONFIG{CANDIS_NO_GRAPHIC_LIB} == False
       version: 9.6.0~1
     - name: espressif/esp_codec_dev
+      public: true
+      rules:
+      - if: $CONFIG{CANDIS_AUDIO} == True
       version: 1.6.2
     - name: espressif/bmi270
       rules:
       - if: $CONFIG{CANDIS_IMU} == True
       version: 1.1.0
+    - name: espressif/esp_tinyusb
+      rules:
+      - if: $CONFIG{CANDIS_USB_DEVICE} == True
+      version: 3.0.0
+    - name: espressif/usb
+      public: true
+      rules:
+      - if: $CONFIG{CANDIS_USB_HOST} == True
+      version: 1.6.0
     source:
       path: ../../components/candis
       type: local
     targets:
     - esp32s31
     version: 0.1.0
-  candis_dock:
+  candis-dock:
     dependencies:
     - name: idf
-      version: '>=6.2,<6.3'
+      version: '>=6.1,<6.3'
     - name: candis
       path: ../candis
       public: true
     source:
-      path: ../../components/candis_dock
+      path: ../../components/candis-dock
       type: local
     targets:
     - esp32s31
@@ -199,16 +217,16 @@ dependencies:
   tg28-esp:
     dependencies:
     - name: idf
-      version: '>=6.2,<6.3'
+      version: '>=6.1,<6.3'
     source:
       path: ../../components/tg28-esp
       type: local
     version: 0.1.0
 direct_dependencies:
 - candis
-- candis_dock
+- candis-dock
 - espressif/esp_tinyusb
 - tg28-esp
-manifest_hash: c36c70bd3023ef8a45cf90060bf3635685805fab7b3f03b8aafcf0ac8ba5b7d7
+manifest_hash: 5864105ffd608cc47267140606d535ec2c64885afd01a5095a21a25252020653
 target: esp32s31
 version: 3.0.0

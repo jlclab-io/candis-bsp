@@ -47,7 +47,7 @@ To register a third-party product, provide the vendor, product, hardware revisio
 
 | Vendor ID | Board Type | Product ID | Product | Registration |
 | --- | --- | --- | --- | --- |
-| `0xCA4E` | `0x31` | `0x0002` | `candis_dock` | Rev. 1.1 (`0x0101`) and 1.2 (`0x0102`), direct. The BSP enum uses `CANDIS_BASEBOARD_BB` |
+| `0xCA4E` | `0x31` | `0x0002` | `candis-dock` | Rev. 1.1 (`0x0101`) and 1.2 (`0x0102`), direct. The BSP enum uses `CANDIS_BASEBOARD_BB` |
 | `0xCA4E` | `0x31` | `0x0003` | `candis_bb` | Reserved direct baseboard without module slots. Example rev. 1.0. Board design, BOM, and driver configuration require registration |
 | `0xCA4E` | `0x32` | `0x0101` | `candis_joystick` | Reference joystick module, example rev. 1.0. Design and qualification pending |
 | `0xCA4E` | `0x32` | `0x0102` | `candis_sensor` | Reference I²C sensor module, example rev. 1.0. Design and qualification pending |

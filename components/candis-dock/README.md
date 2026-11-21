@@ -16,7 +16,7 @@ Use both BTB connectors. Release UART0 before claiming GPIO58/59, and leave U6 e
 
 ## Use in an application
 
-Add a dependency on `components/candis_dock` and include [`bsp/candis_dock.h`](include/bsp/candis_dock.h). Use one control task for the Dock session.
+Add a dependency on `components/candis-dock` and include [`bsp/candis_dock.h`](include/bsp/candis_dock.h). Use one control task for the Dock session.
 
 Call `candis_dock_get_state()` after the expansion rail is available to distinguish an absent Dock, a recognized but unopened Dock, and an initialized Dock session. `candis_dock_open()` owns the component's application DC1SW lease.
 

@@ -7,7 +7,7 @@ Candis 核心板的 30Pin CN1 和 50Pin CN2 同时连接一块 Dock BTB 底板�
 ```text
 Candis 核心板
   CN1 + CN2 → BTB 0x50 → 一块底板
-                         └ candis_dock
+                         └ candis-dock
                            ├ LEFT  (U6) → 0x51
                            └ RIGHT (U7) → 0x52
 ```
@@ -163,7 +163,7 @@ LEFT/RIGHT 的 A0/A1/A2、WP、VCC 是否符合约定，须用各模块或转接
 | --- | --- |
 | 核心板 | 主 I²C0 接 TG28、RTC、触摸、音频等，显示、存储和下载路径按核心配置保留。无可用底板时扩展专用外设不开启 |
 | `candis_bb` | 预留无子槽直连。身份 I²C 为 `0x50`，其余资源随独立板图/BOM 登记。不存在从 Dock 继承的默认引脚 |
-| `candis_dock` v1.2 | 同一 SDMMC 和 GPIO39 CD，BMI270 经 Q2 接主 I²C0。CN3 为 RSPK 差分端；旧 v1.1 配置的 CN3 为 LSPK，按硬件修订选择声道。U6/U7 只能使用各自经核验的引脚和已验证的共享方式 |
+| `candis-dock` v1.2 | 同一 SDMMC 和 GPIO39 CD，BMI270 经 Q2 接主 I²C0。CN3 为 RSPK 差分端；旧 v1.1 配置的 CN3 为 LSPK，按硬件修订选择声道。U6/U7 只能使用各自经核验的引脚和已验证的共享方式 |
 | 摇杆参考模块 | LEFT 的 U6.20/GPIO42、U6.18/GPIO43 为 X/Y，U6.6/GPIO36 为按压输入，U6.11/DC1SW 与 GND 供模块，U6.17/15 为 SCL/SDA。除 EEPROM `0x51` 外无功能 I²C 设备。输入范围、上下拉、防错和实际 ADC 位宽/衰减需验证 |
 | 传感器参考模块 | RIGHT 的 U7.16/18 为 SCL/SDA，U7.10/20 为 DC1SW/GND。EEPROM `0x52`，功能 I²C 地址示例 `0x44`，无 GPIO 中断。批准配置须登记实际传感器、地址绑带、总线时序和负载 |
 

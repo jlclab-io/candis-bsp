@@ -109,5 +109,5 @@ Candis PCM 接口提供 48 kHz 有符号立体声读写、帧数和超时，允�
 
 ## 扩展与摄像头
 
-- 调用 `candis_baseboard_probe()` 前释放 UART0 并确认 DC1SW 已上电。将返回的身份传给 [Dock](../../components/candis_dock/README.md) 接口。描述符兼容范围见 [BSP 支持](expansion.md#bsp-支持)。
+- 调用 `candis_baseboard_probe()` 前释放 UART0 并确认 DC1SW 已上电。将返回的身份传给 [Dock](../../components/candis-dock/README.md) 接口。描述符兼容范围见 [BSP 支持](expansion.md#bsp-支持)。
 - [摄像头 API](../../components/candis-camera/README.md)由应用配置板级引脚、SCCB、时钟和电源回调。构建时选择 OV5640 模式。拍照时复制帧到应用内存，连续取流时借用并归还 DMA 帧。

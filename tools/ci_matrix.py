@@ -137,7 +137,7 @@ def plan_paths(paths: list[str]) -> list[str]:
                 selected.update(CORE_SMOKE_IDS)
             elif component == "candis-camera":
                 selected.update(builds_for_project("camera"))
-            elif component == "candis_dock":
+            elif component == "candis-dock":
                 selected.update(
                     {
                         "dock:default",

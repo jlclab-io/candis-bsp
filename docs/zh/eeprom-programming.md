@@ -43,14 +43,14 @@ Dock v1.2 的 U10 使用英锐芯 AT24C02 SOP-8（`C688857`）。其容量为 25
 | Board Name | 位置和地址 | Type / Product ID | Hardware Revision | Serial Number | TLV 及用途 |
 | --- | --- | --- | --- | --- | --- |
 | `candis_bb` | BTB `0x50` | `0x31 / 0x0003` | `0x0100` | `0x00030001` | 长度 0，独立底板无子槽 |
-| `candis_dock` | BTB `0x50` | `0x31 / 0x0002` | `0x0102` | `0x00020001` | 长度 0，按 v1.2 配置选择右声道及两子槽 |
+| `candis-dock` | BTB `0x50` | `0x31 / 0x0002` | `0x0102` | `0x00020001` | 长度 0，按 v1.2 配置选择右声道及两子槽 |
 | `candis_joystick` | LEFT `0x51` | `0x32 / 0x0101` | `0x0100` | `0x01010001` | 14 字节，X 为 150/1500/2850 mV，Y 为 160/1550/2900 mV |
 | `candis_sensor` | RIGHT `0x52` | `0x32 / 0x0102` | `0x0100` | `0x01020001` | 4 字节，采样间隔 2000 ms。功能地址 `0x44` 由已验证的固件配置提供 |
 
 | Board Name | Identity CRC | Manufacturing CRC | Parameter CRC |
 | --- | --- | --- | --- |
 | `candis_bb` | `0x133A` | `0x00C1` | `0xC619` |
-| `candis_dock` | `0x6527` | `0x00C1` | `0xC619` |
+| `candis-dock` | `0x6527` | `0x00C1` | `0xC619` |
 | `candis_joystick` | `0x35E7` | `0x00C1` | `0x91BF` |
 | `candis_sensor` | `0xFE75` | `0x00C1` | `0xC660` |
 

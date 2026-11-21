@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include "esp_check.h"
+#include "esp_idf_version.h"
 #include "esp_stdio.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -33,7 +34,9 @@ static const tinyusb_cdcacm_itf_t PORT = TINYUSB_CDC_ACM_0;
 static SemaphoreHandle_t s_lock;
 static SemaphoreHandle_t s_log_lock;
 static TaskHandle_t s_worker;
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 2, 0)
 static esp_stdio_handle_t s_sink;
+#endif
 static RingbufHandle_t s_output;
 static int s_boot_input = -1;
 static candis_example_usb_mode_t s_mode;
@@ -102,6 +105,7 @@ static bool claim_download(void)
 }
 #endif
 
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 2, 0)
 static int console_open(void *ctx, const char *path, int flags, int mode)
 {
     (void)ctx;
@@ -168,6 +172,7 @@ static const esp_vfs_fs_ops_t s_console_ops = {
     .open_p = console_open, .close_p = console_close, .write_p = console_write,
     .read_p = console_read, .fstat_p = console_fstat,
 };
+#endif /* ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 2, 0) */
 
 static bool send_pending_output(void)
 {
@@ -318,6 +323,7 @@ esp_err_t candis_example_usb_start(candis_example_usb_mode_t mode, bool allow_do
                 s_output = output;
                 xSemaphoreGive(s_log_lock);
             }
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 2, 0)
             if (err == ESP_OK && !s_sink) {
                 const esp_stdio_driver_config_t sink = {.vfs_ops = &s_console_ops, .path = "/"};
                 err = esp_stdio_register_driver(&sink, &s_sink);
@@ -339,6 +345,7 @@ esp_err_t candis_example_usb_start(candis_example_usb_mode_t mode, bool allow_do
                     }
                 }
             }
+#endif /* ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 2, 0) */
         }
     }
     if (err == ESP_OK) {

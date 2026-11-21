@@ -7,6 +7,7 @@
 #include "driver/gpio.h"
 #include "driver/sdmmc_host.h"
 #include "esp_check.h"
+#include "esp_idf_version.h"
 #include "esp_log.h"
 #include "esp_vfs_fat.h"
 
@@ -358,7 +359,12 @@ esp_err_t candis_storage_mount_with_config(const char *base_path, candis_storage
     if (!config) {
         return ESP_ERR_INVALID_ARG;
     }
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 2, 0)
     const esp_vfs_fat_sdmmc_mount_config_t mount = {.max_files = 4, .read_only = config->read_only};
+#else
+    /* IDF 6.1 lacks the read_only mount option; the request is ignored. */
+    const esp_vfs_fat_sdmmc_mount_config_t mount = {.max_files = 4};
+#endif
     const bsp_sdcard_cfg_t options = {.mount = &mount};
     return mount_with_config(base_path, profile, &options, config->manage_power, false, card);
 }

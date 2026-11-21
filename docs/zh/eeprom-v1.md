@@ -49,7 +49,7 @@ Candis 产品 ID `0x0001` 保留。
 
 | Vendor ID | Board Type | Product ID | 产品 | 本版登记 |
 | --- | --- | --- | --- | --- |
-| `0xCA4E` | `0x31` | `0x0002` | `candis_dock` | v1.1 `0x0101` 和 v1.2 `0x0102`，直连。旧代码使用 `CANDIS_BASEBOARD_BB` 名称 |
+| `0xCA4E` | `0x31` | `0x0002` | `candis-dock` | v1.1 `0x0101` 和 v1.2 `0x0102`，直连。旧代码使用 `CANDIS_BASEBOARD_BB` 名称 |
 | `0xCA4E` | `0x31` | `0x0003` | `candis_bb` | 独立无子槽底板预留。示例 v1.0，具体板图、BOM 和驱动配置需登记 |
 | `0xCA4E` | `0x32` | `0x0101` | `candis_joystick` | 摇杆参考模块，示例 v1.0。待出图和验证 |
 | `0xCA4E` | `0x32` | `0x0102` | `candis_sensor` | I²C 传感器参考模块，示例 v1.0。待出图和验证 |

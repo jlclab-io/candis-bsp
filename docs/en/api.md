@@ -109,5 +109,5 @@ The Candis PCM API supports 48 kHz signed stereo with one RX task and one TX tas
 
 ## Expansion and camera
 
-- Release UART0 and confirm DC1SW before calling `candis_baseboard_probe()`. Use the returned identity with the [Dock](../../components/candis_dock/README.md) API. See [current BSP support](expansion.md#bsp-support) for descriptor compatibility.
+- Release UART0 and confirm DC1SW before calling `candis_baseboard_probe()`. Use the returned identity with the [Dock](../../components/candis-dock/README.md) API. See [current BSP support](expansion.md#bsp-support) for descriptor compatibility.
 - The [camera API](../../components/candis-camera/README.md) accepts board-specific pins, SCCB, clock and power callbacks. Choose the OV5640 mode at build time. Copy a still frame into application memory, or acquire and release DMA frames for streaming.

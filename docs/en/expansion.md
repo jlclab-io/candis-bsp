@@ -7,7 +7,7 @@ The 30-pin CN1 and 50-pin CN2 on Candis mate with one Dock baseboard at a time. 
 ```text
 Candis core board
   CN1 + CN2 → BTB 0x50 → One baseboard
-                         └ candis_dock
+                         └ candis-dock
                            ├ LEFT  (U6) → 0x51
                            └ RIGHT (U7) → 0x52
 ```
@@ -163,7 +163,7 @@ Match the core and parent revisions, slot, and [product key](eeprom-v1.md#ids-an
 | --- | --- |
 | Core board | TG28, RTC, touch, and audio use I²C0. Reserve core display, storage, and download resources. Use core-only operation without an available baseboard |
 | `candis_bb` | Reserved direct baseboard without slots. Identity uses `0x50`. Register its remaining resources from its own schematic and BOM |
-| `candis_dock` rev. 1.2 | SDMMC uses the same pins and GPIO39 CD. BMI270 connects to I²C0 through Q2. CN3 carries the right differential speaker output. Rev. 1.1 carries the left output. Use only validated slot pin assignments and sharing arrangements |
+| `candis-dock` rev. 1.2 | SDMMC uses the same pins and GPIO39 CD. BMI270 connects to I²C0 through Q2. CN3 carries the right differential speaker output. Rev. 1.1 carries the left output. Use only validated slot pin assignments and sharing arrangements |
 | Reference joystick | LEFT U6.20/GPIO42 and U6.18/GPIO43 are X/Y, U6.6/GPIO36 is the press input. U6.11/DC1SW and GND supply the module. U6.17/15 are SCL/SDA. The only I²C device is EEPROM `0x51`. Verify ADC range and mode, pulls, and assembly keying |
 | Reference sensor | RIGHT U7.16/18 are SCL/SDA, and U7.10/20 are DC1SW/GND. EEPROM uses `0x52`, with `0x44` as the example sensor address and no GPIO IRQ. Register the actual part, straps, timing, and load before use |
 

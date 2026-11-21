@@ -21,7 +21,7 @@ typedef enum {
 
 typedef struct {
     bool manage_power;
-    bool read_only; /**< Reject writes to the mounted FAT volume. */
+    bool read_only; /**< Reject writes to the mounted FAT volume. Requires ESP-IDF 6.2 or later; ignored on earlier versions. */
 } candis_storage_mount_config_t;
 
 /** Standard ESP-BSP SDMMC mount configuration.

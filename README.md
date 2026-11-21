@@ -75,7 +75,7 @@ Power off before fitting a baseboard. Connect one baseboard at a time across bot
 - [`candis`](components/candis/README.md) provides the core board's display, touch, RTC, power, and peripheral APIs.
 - [`tg28-esp`](components/tg28-esp/README.md) is the standalone TG28-ESP power management driver.
 - [`candis-camera`](components/candis-camera/README.md) provides configurable OV5640 DVP capture.
-- [`candis_dock`](components/candis_dock/README.md) manages Dock identification, TF cards, and speaker routing.
+- [`candis-dock`](components/candis-dock/README.md) manages Dock identification, TF cards, and speaker routing.
 
 The BSP is in development preview. See [component support](docs/en/component-coverage.md) for hardware coverage.
 
