@@ -251,7 +251,6 @@ esp_err_t candis_expansion_ldo_acquire(candis_expansion_ldo_t rail, uint16_t vol
     if (!handle) {
         return ESP_ERR_INVALID_ARG;
     }
-    *handle = NULL;
     if ((unsigned)rail >= sizeof(s_expansion_ldos) / sizeof(s_expansion_ldos[0]) ||
         voltage_mv < TG28_ESP_LDO_MIN_MV || voltage_mv > TG28_ESP_LDO_MAX_MV ||
         (voltage_mv - TG28_ESP_LDO_MIN_MV) % TG28_ESP_LDO_STEP_MV) {
@@ -260,6 +259,25 @@ esp_err_t candis_expansion_ldo_acquire(candis_expansion_ldo_t rail, uint16_t vol
     if (!candis_control_enter()) {
         return ESP_ERR_INVALID_STATE;
     }
+    if (*handle) {
+        bool known_handle = false;
+        for (size_t i = 0; i < sizeof(s_expansion_ldos) / sizeof(s_expansion_ldos[0]); ++i) {
+            if (*handle == &s_expansion_ldos[i]) {
+                if (s_expansion_ldos[i].power.bus) {
+                    candis_control_leave();
+                    return ESP_ERR_INVALID_STATE;
+                }
+                *handle = NULL;
+                known_handle = true;
+                break;
+            }
+        }
+        if (!known_handle) {
+            candis_control_leave();
+            return ESP_ERR_INVALID_STATE;
+        }
+    }
+    *handle = NULL;
     candis_power_t *power = &s_expansion_ldos[rail].power;
     esp_err_t err = ESP_ERR_INVALID_STATE;
     if (!power->bus) {

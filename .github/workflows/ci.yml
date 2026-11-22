@@ -24,6 +24,7 @@ jobs:
       groups: ${{ steps.plan.outputs.groups }}
       matrix_groups: ${{ steps.plan.outputs.matrix_groups }}
       host_tests: ${{ steps.plan.outputs.host_tests }}
+      docs_check: ${{ steps.plan.outputs.docs_check }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - name: Plan changed-scope builds
@@ -37,9 +38,19 @@ jobs:
             matrix_groups='["none"]'
           fi
           host_tests="$(python3 -c 'import json,sys; print(str(json.loads(sys.argv[1])["host_tests"]).lower())' "$plan")"
-          printf 'builds=%s\ngroups=%s\nmatrix_groups=%s\nhost_tests=%s\n' \
-            "$builds" "$groups" "$matrix_groups" "$host_tests" >> "$GITHUB_OUTPUT"
+          docs_check="$(python3 -c 'import json,sys; print(str(json.loads(sys.argv[1])["docs_check"]).lower())' "$plan")"
+          printf 'builds=%s\ngroups=%s\nmatrix_groups=%s\nhost_tests=%s\ndocs_check=%s\n' \
+            "$builds" "$groups" "$matrix_groups" "$host_tests" "$docs_check" >> "$GITHUB_OUTPUT"
           printf 'Selected ESP-IDF groups: %s\n' "$groups"
+
+  markdown:
+    needs: checks
+    if: needs.checks.outputs.docs_check == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Check repository-local Markdown links and anchors
+        run: python3 tools/check_markdown_links.py
 
   host-tests:
     needs: checks
@@ -60,7 +71,7 @@ jobs:
     timeout-minutes: 60
     strategy:
       fail-fast: false
-      max-parallel: 2
+      max-parallel: 4
       matrix:
         group: ${{ fromJSON(needs.checks.outputs.matrix_groups) }}
     steps:

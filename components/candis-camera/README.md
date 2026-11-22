@@ -1,44 +1,50 @@
 # Candis Camera
 
-Configurable 8-bit DVP capture for ESP32-S31 and ESP-IDF 6.2. The component uses Espressif ESP Video and ESP Cam Sensor with the OV5640. Its pin, clock, and power configuration can be supplied by an application independently of the Candis board BSP.
+Configurable 8-bit DVP capture for ESP32-S31 and ESP-IDF 6.1/6.2. The component uses [ESP Video 2.6.0](https://components.espressif.com/components/espressif/esp_video/versions/2.6.0) and [ESP Cam Sensor 2.7.0](https://components.espressif.com/components/espressif/esp_cam_sensor/versions/2.7.0).
 
-## Preview and stills
+## Sensor profiles
 
-Use the [camera example](https://github.com/jlclab-io/candis-bsp/tree/main/examples/camera) to build the OV5640 wiring profile for your hardware. The example shows an 800 × 600 RGB565 feed cropped to the 480 × 480 AMOLED. Connect the OV5640, panel, and supply ALDO1.
+The component has one configuration structure per sensor in [src/profiles](src/profiles). `candis_camera_profile_get()` and `candis_camera_profile_at()` provide the reference mode, XCLK frequency, chip IDs, 7-bit SCCB addresses, and control capabilities. `CANDIS_CAMERA_PROFILE_BUILD_ENABLED` indicates that the official DVP detector is enabled in the firmware.
 
-For hardware with GPIO39/40 for reset and power-down, GPIO46–57 for DVP and XCLK, and BLDO1, ALDO4, ALDO3 for camera supplies, use the provided `sdkconfig.fixture` profile. The power-down pin uses open drain with a pull-up to sensor DOVDD. Do not enable this profile on Dock, where GPIO39 is wired to TF card detect.
+The profiles cover BF20A6, BF3031, BF3045, BF3925, BF3A03, GC0308, GC032A, GC2145, MT9D111, OV2640, OV3640, OV3660, OV5640, SC030IOT, SC101IOT, SC2336, and SP0A39. For BF3031, match `CONFIG_CAMERA_BF3031_SID_HIGH` to the module strap. SID low uses address `0x6e` and SID high uses `0x6d`.
 
-| Build profile | Use |
-| --- | --- |
-| `sdkconfig.still` | Display a single captured frame |
-| `sdkconfig.jpeg` | Save a still to a FAT-formatted TF card with the GPIO35 card-detect wiring and powered DC1SW |
-| `sdkconfig.controls` | Adjust sensor settings from the serial console during preview |
-| `sdkconfig.manual` | Apply manual settings before preview or capture |
-| `sdkconfig.uyvy` / `sdkconfig.yuyv` | Select UYVY with software conversion or YUYV with DVP hardware conversion. Verify format and color on the actual assembly |
+## Application wiring
 
-Add a profile after `sdkconfig.fixture` in `SDKCONFIG_DEFAULTS` to customize behavior. Use a separate build directory and `SDKCONFIG` file for each variant.
+Fill `candis_camera_config_t` with the application's DVP pins, SCCB settings, and XCLK configuration. Use a dedicated HP I²C port or pass a borrowed bus with both SCCB pin fields set to `GPIO_NUM_NC`. Set `xclk` to `GPIO_NUM_NC` when the application or module supplies its own clock. Set `validate_sensor` and `expected_sensor` to verify the detected chip before capture. For a mode other than the profile reference mode, use the XCLK specified in the corresponding Espressif sensor format table.
 
-## Capture API
+The application owns supply voltages, power sequencing, RESET and PWDN. The optional `acquire` callback supplies board resources before XCLK starts. The optional `prepare` callback runs after XCLK starts and before detection. `release` runs after video and XCLK stop. Keep the callback context and borrowed bus valid until cleanup succeeds. Make `release` safe to retry after partial acquisition or cleanup. See the [example wiring and resource callbacks](https://github.com/jlclab-io/candis-bsp/blob/main/examples/camera/main/camera_fixture.c).
 
-Add a dependency on `components/candis-camera`. Enable DVP video, OV5640 DVP auto-detection, and PSRAM. Use [`bsp/candis_camera.h`](include/bsp/candis_camera.h) from one control task.
+## Capture and controls
+
+Enable DVP video and the sensor's DVP auto-detection option. Call the API in [bsp/candis_camera.h](include/bsp/candis_camera.h) from one control task.
 
 | Operation | API |
 | --- | --- |
-| Configure the camera | `candis_camera_init()` |
-| List build-enabled sensor modes and active output formats | `candis_camera_get_mode()`, `candis_camera_get_pixel_format()` |
-| Start a stream and obtain its actual format | `candis_camera_stream_start()` |
-| Copy one frame to application-owned memory | `candis_camera_capture_frame()` |
+| Initialize with application configuration | `candis_camera_init()` |
+| Identify the active sensor and profile | `candis_camera_read_sensor_id()`, `candis_camera_get_active_profile()` |
+| Enumerate sensor modes and output formats | `candis_camera_get_mode()`, `candis_camera_get_pixel_format()` |
+| Start capture and obtain the actual output format | `candis_camera_stream_start()` |
+| Copy a frame into application memory | `candis_camera_capture_frame()` |
 | Borrow and return a DMA frame | `candis_camera_frame_acquire()`, `candis_camera_frame_release()` |
-| Stop capture and release resources | `candis_camera_stream_stop()`, then `candis_camera_stop()` |
+| Query, read or set an official V4L2 control | `candis_camera_control_query()`, `candis_camera_control_get()`, `candis_camera_control_set()` |
+| Stop capture and release resources | `candis_camera_stop()` |
 
-Choose the active OV5640 mode in Kconfig. The stream API validates a requested mode against the active mode. Use the returned format for stride, dimensions, and pixel encoding. Return a borrowed buffer before stopping or waiting on unrelated I/O.
+Use the returned format for stride, dimensions, and pixel encoding. Query controls after initialization and apply settings between borrowed frames during capture. The profile records which controls support readback. A write-only control returns `ESP_ERR_NOT_SUPPORTED` from `candis_camera_control_get()`. OV5640 supports setting horizontal mirror, vertical flip, and test pattern. SC2336 also supports gain, exposure value, and write-only absolute exposure in 100-microsecond units. Applications using native V4L2 can obtain the device path with `candis_camera_device()`.
 
-The [OV5640 controls](include/bsp/candis_ov5640.h) cover exposure, gain, white balance, brightness, contrast, saturation, image effects, sharpness, denoise, and gamma. Apply changes between frame acquisitions. Advanced applications can use the native V4L2 device from `candis_camera_device()`. Use a single capture interface per session.
+## Camera example
 
-## Custom wiring
+Each `sdkconfig.<model>` fragment in the [camera example](https://github.com/jlclab-io/candis-bsp/tree/main/examples/camera) selects one driver and reference mode for [Dock v1.2 U7](https://github.com/jlclab-io/candis-bsp/blob/main/docs/en/expansion.md#dock-20-pin-headers). Match the module pinout, I/O levels, XCLK, supply rails, and RESET/PWDN requirements before connecting it. The default Dock build leaves supply management to the application or module. Release UART0 on the expansion I²C pins before using SCCB. U7 has no dedicated RESET or PWDN line.
 
-Provide data, PCLK, VSYNC, HSYNC, and SCCB settings in `candis_camera_config_t`. Use a dedicated HP I²C port or supply a shared bus with both SCCB pin fields set to `GPIO_NUM_NC`. Keep that bus alive until camera stop succeeds. Mark unused RESET, PWDN, and XCLK as `GPIO_NUM_NC`. With an external XCLK, start it before sensor detection.
+RGB565, YUV422, and grayscale modes can preview on the 480 × 480 AMOLED. RAW and JPEG modes capture a payload and log its size. Use a separate build directory and SDKCONFIG file for each variant.
 
-Use paired resource callbacks for board-specific power. Keep their context, pins, and any clock resources valid until `candis_camera_stop()` succeeds. The release callback must be able to clean up partial acquisition. The [fixture profile](https://github.com/jlclab-io/candis-bsp/blob/main/examples/camera/main/camera_fixture.c) is a wiring example.
+| Fragment | Use |
+| --- | --- |
+| `sdkconfig.dvp_all` | Compile all 17 official DVP drivers for build verification |
+| `sdkconfig.fixture` | Select the OV5640 validation fixture's wiring and supplies |
+| `sdkconfig.still` | Display a single captured frame |
+| `sdkconfig.jpeg` | Save a still to the validation fixture's FAT-formatted TF card |
+| `sdkconfig.uyvy` / `sdkconfig.yuyv` | Select the fixture's UYVY software conversion or YUYV DVP conversion path |
+
+On the validation fixture, disable `CONFIG_CANDIS_CAMERA_FIXTURE_PWDN_GPIO` for a module that holds PWDN low in hardware.
 
 [Apache-2.0](LICENSE)

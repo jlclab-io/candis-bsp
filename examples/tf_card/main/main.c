@@ -77,7 +77,7 @@ static void use_card(bool write_test)
 
 void app_main(void)
 {
-    ESP_ERROR_CHECK(candis_example_usb_start(CANDIS_EXAMPLE_USB_CONSOLE, true));
+    ESP_ERROR_CHECK_WITHOUT_ABORT(candis_example_usb_start(CANDIS_EXAMPLE_USB_CONSOLE, true));
     vTaskDelay(pdMS_TO_TICKS(1500));
 #ifdef CONFIG_CANDIS_TF_WRITE_TEST
     ESP_LOGI(TAG, "TF_READY commands=L:list,W:write_verify,Q:release");

@@ -12,7 +12,7 @@ From the root of the checkout, run `idf.py --preview -C examples/<name> build` i
 | [Display](../../examples/display) | Try LVGL, AMOLED refresh, and touch with ALDO1 supplied. |
 | [Audio recorder](../../examples/audio/README.md) | Record and play stereo clips with the touchscreen. Connect the microphones and speakers and supply ALDO1/ALDO2. |
 | [Music player](../../examples/music_player/README.md) | Play the bundled score and select speaker channels. Requires display and audio power. |
-| [Camera](../../examples/camera) | Preview OV5640 on the AMOLED. Use the camera fixture profile; still and JPEG options are in the [camera guide](../../components/candis-camera/README.md). |
+| [Camera](../../examples/camera) | Capture with a DVP sensor selected in the [camera guide](../../components/candis-camera/README.md). Preview RGB565, YUV422 and grayscale on the AMOLED. |
 | [TF card](../../examples/tf_card) | Browse a FAT-formatted card. Select the card-detect pin for the hardware and ensure DC1SW is supplied. |
 | [Expansion](../../examples/expansion) | Detect the Dock, browse its TF card, and optionally probe module addresses. |
 | [Dock](../../examples/dock/README.md) | Identify the Dock and exercise TF, BMI270, display and audio. |
@@ -41,7 +41,7 @@ From the root of the checkout, run `idf.py --preview -C examples/<name> build` i
 | --- | --- | --- |
 | TF card | Candis Dock | Card detect on GPIO39 |
 | ADC | Candis Dock (LEFT header) | GPIO42 and GPIO43 at U6.20 and U6.18 |
-| Camera | OV5640 module | Reset and power-down controlled per [camera wiring](../../components/candis-camera/README.md#custom-wiring) |
+| Camera | Dock v1.2 U7 or OV5640 validation fixture | Select a sensor and supply wiring using the [camera guide](../../components/candis-camera/README.md#application-wiring) |
 | LED and motor | Core board and Dock | LED on GPIO37, motor on GPIO5 |
 
 For Dock TF storage, keep LEFT U6 empty or leave GPIO39 high impedance. Use a FAT-formatted card. Leave GPIO37 available at U6.8 to use the core LED. Connect external ADC inputs with a common ground and keep them within the configured 0 dB attenuation range.

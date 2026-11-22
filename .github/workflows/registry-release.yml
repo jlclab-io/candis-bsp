@@ -1,6 +1,17 @@
 name: ESP Component Registry
 
 on:
+  pull_request:
+    paths:
+      - 'components/**'
+      - 'examples/display/**'
+      - 'examples/camera/**'
+      - 'examples/common/candis_example_usb/**'
+      - 'tools/stage_registry_extension.py'
+      - 'tools/verify_tg28_consumer.sh'
+      - 'tools/copy_example_usb.sh'
+      - '.github/actions/setup-esp32s31/action.yml'
+      - '.github/workflows/registry-release.yml'
   workflow_dispatch:
     inputs:
       publish:
@@ -94,27 +105,18 @@ jobs:
           printf 'idf_component_register(SRCS "main.c" INCLUDE_DIRS ".")\n' > "$consumer/main/CMakeLists.txt"
           cat > "$consumer/main/main.c" <<'C'
           #include "bsp/candis_camera.h"
-          #include "bsp/candis_ov5640.h"
           void app_main(void)
           {
-              candis_ov5640_controls_t controls;
-              candis_ov5640_isp_t isp;
-              candis_ov5640_cip_t cip;
-              candis_ov5640_gamma_t gamma;
-              (void)candis_ov5640_get_controls(&controls, NULL);
-              (void)candis_ov5640_set_controls(&controls);
-              (void)candis_ov5640_get_isp(&isp);
-              (void)candis_ov5640_set_isp(&isp);
-              (void)candis_ov5640_get_cip(&cip);
-              (void)candis_ov5640_set_cip(&cip);
-              (void)candis_ov5640_set_ae_level(1);
-              (void)candis_ov5640_set_white_balance_preset(CANDIS_OV5640_WB_SUNNY);
-              (void)candis_ov5640_set_color_effect(CANDIS_OV5640_EFFECT_SEPIA);
-              (void)candis_ov5640_set_cmx_saturation(-2);
-              (void)candis_ov5640_get_gamma(&gamma);
-              (void)candis_ov5640_set_gamma(&gamma);
-              (void)candis_ov5640_set_gamma_preset(1);
-              (void)candis_camera_get_pixel_format(0, NULL);
+              const candis_camera_profile_t *profile = candis_camera_profile_get(CANDIS_CAMERA_SENSOR_OV5640);
+              candis_camera_control_info_t control;
+              int32_t value;
+              struct v4l2_fmtdesc format;
+              if (candis_camera_profile_supports_control(profile, CANDIS_CAMERA_CONTROL_HFLIP)) {
+                  (void)candis_camera_control_query(CANDIS_CAMERA_CONTROL_HFLIP, &control);
+                  (void)candis_camera_control_get(CANDIS_CAMERA_CONTROL_HFLIP, &value);
+                  (void)candis_camera_control_set(CANDIS_CAMERA_CONTROL_HFLIP, 1);
+              }
+              (void)candis_camera_get_pixel_format(0, &format);
               ESP_ERROR_CHECK(candis_camera_stop());
           }
           C

@@ -59,7 +59,7 @@ static void sample_window(adc_oneshot_unit_handle_t adc, const adc_channel_t cha
 
 void app_main(void)
 {
-    ESP_ERROR_CHECK(candis_example_usb_start(CANDIS_EXAMPLE_USB_CONSOLE, true));
+    ESP_ERROR_CHECK_WITHOUT_ABORT(candis_example_usb_start(CANDIS_EXAMPLE_USB_CONSOLE, true));
     adc_unit_t unit = ADC_UNIT_1;
     adc_channel_t channels[CHANNELS];
     for (unsigned i = 0; i < CHANNELS; ++i) {

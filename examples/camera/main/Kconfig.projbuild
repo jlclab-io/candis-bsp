@@ -3,12 +3,210 @@ menu "Candis camera preview"
 config CANDIS_CAMERA_FIXTURE
     bool "Use the OV5640 wiring of the Candis validation fixture"
     default n
+    select CAMERA_OV5640
+    select CAMERA_OV5640_AUTO_DETECT_DVP_INTERFACE_SENSOR
     help
         Only enable with the validation fixture physically attached.
         The fixture drives GPIO39 as camera reset. Candis Dock uses that
         pin for TF card detect.
 
-if CANDIS_CAMERA_FIXTURE
+config CANDIS_CAMERA_ENABLE_ALL_DVP_SENSORS
+    bool "Build all Espressif 8-bit DVP sensor drivers"
+    default n
+    depends on !CANDIS_CAMERA_FIXTURE
+    select CAMERA_BF20A6
+    select CAMERA_BF20A6_AUTO_DETECT_DVP_INTERFACE_SENSOR
+    select CAMERA_BF3031
+    select CAMERA_BF3031_AUTO_DETECT_DVP_INTERFACE_SENSOR
+    select CAMERA_BF3045
+    select CAMERA_BF3045_AUTO_DETECT_DVP_INTERFACE_SENSOR
+    select CAMERA_BF3925
+    select CAMERA_BF3925_AUTO_DETECT_DVP_INTERFACE_SENSOR
+    select CAMERA_BF3A03
+    select CAMERA_BF3A03_AUTO_DETECT_DVP_INTERFACE_SENSOR
+    select CAMERA_GC0308
+    select CAMERA_GC0308_AUTO_DETECT_DVP_INTERFACE_SENSOR
+    select CAMERA_GC032A
+    select CAMERA_GC032A_AUTO_DETECT_DVP_INTERFACE_SENSOR
+    select CAMERA_GC2145
+    select CAMERA_GC2145_AUTO_DETECT_DVP_INTERFACE_SENSOR
+    select CAMERA_MT9D111
+    select CAMERA_MT9D111_AUTO_DETECT_DVP_INTERFACE_SENSOR
+    select CAMERA_OV2640
+    select CAMERA_OV2640_AUTO_DETECT_DVP_INTERFACE_SENSOR
+    select CAMERA_OV3640
+    select CAMERA_OV3640_AUTO_DETECT_DVP_INTERFACE_SENSOR
+    select CAMERA_OV3660
+    select CAMERA_OV3660_AUTO_DETECT_DVP_INTERFACE_SENSOR
+    select CAMERA_OV5640
+    select CAMERA_OV5640_AUTO_DETECT_DVP_INTERFACE_SENSOR
+    select CAMERA_SC030IOT
+    select CAMERA_SC030IOT_AUTO_DETECT_DVP_INTERFACE_SENSOR
+    select CAMERA_SC101IOT
+    select CAMERA_SC101IOT_AUTO_DETECT_DVP_INTERFACE_SENSOR
+    select CAMERA_SC2336
+    select CAMERA_SC2336_AUTO_DETECT_DVP_INTERFACE_SENSOR
+    select CAMERA_SP0A39
+    select CAMERA_SP0A39_AUTO_DETECT_DVP_INTERFACE_SENSOR
+    help
+        Include every sensor with an 8-bit DVP mode in Espressif ESP Cam Sensor
+        2.7.0. Each sensor uses its default Kconfig format.
+
+choice CANDIS_CAMERA_SINGLE_SENSOR_PROFILE
+    prompt "Candis DVP sensor profile"
+    depends on !CANDIS_CAMERA_FIXTURE && !CANDIS_CAMERA_ENABLE_ALL_DVP_SENSORS
+    default CANDIS_CAMERA_PROFILE_OV5640
+    help
+        Select one official DVP sensor for this image. Each choice enables its
+        official Espressif driver and DVP auto-detection entry. Use the matching
+        sdkconfig.<model> profile for an isolated build.
+
+config CANDIS_CAMERA_PROFILE_BF20A6
+    bool "BF20A6"
+    select CAMERA_BF20A6
+    select CAMERA_BF20A6_AUTO_DETECT_DVP_INTERFACE_SENSOR
+
+config CANDIS_CAMERA_PROFILE_BF3031
+    bool "BF3031"
+    select CAMERA_BF3031
+    select CAMERA_BF3031_AUTO_DETECT_DVP_INTERFACE_SENSOR
+
+config CANDIS_CAMERA_PROFILE_BF3045
+    bool "BF3045"
+    select CAMERA_BF3045
+    select CAMERA_BF3045_AUTO_DETECT_DVP_INTERFACE_SENSOR
+
+config CANDIS_CAMERA_PROFILE_BF3925
+    bool "BF3925"
+    select CAMERA_BF3925
+    select CAMERA_BF3925_AUTO_DETECT_DVP_INTERFACE_SENSOR
+
+config CANDIS_CAMERA_PROFILE_BF3A03
+    bool "BF3A03"
+    select CAMERA_BF3A03
+    select CAMERA_BF3A03_AUTO_DETECT_DVP_INTERFACE_SENSOR
+
+config CANDIS_CAMERA_PROFILE_GC0308
+    bool "GC0308"
+    select CAMERA_GC0308
+    select CAMERA_GC0308_AUTO_DETECT_DVP_INTERFACE_SENSOR
+
+config CANDIS_CAMERA_PROFILE_GC032A
+    bool "GC032A"
+    select CAMERA_GC032A
+    select CAMERA_GC032A_AUTO_DETECT_DVP_INTERFACE_SENSOR
+
+config CANDIS_CAMERA_PROFILE_GC2145
+    bool "GC2145"
+    select CAMERA_GC2145
+    select CAMERA_GC2145_AUTO_DETECT_DVP_INTERFACE_SENSOR
+
+config CANDIS_CAMERA_PROFILE_MT9D111
+    bool "MT9D111"
+    select CAMERA_MT9D111
+    select CAMERA_MT9D111_AUTO_DETECT_DVP_INTERFACE_SENSOR
+
+config CANDIS_CAMERA_PROFILE_OV2640
+    bool "OV2640"
+    select CAMERA_OV2640
+    select CAMERA_OV2640_AUTO_DETECT_DVP_INTERFACE_SENSOR
+
+config CANDIS_CAMERA_PROFILE_OV3640
+    bool "OV3640"
+    select CAMERA_OV3640
+    select CAMERA_OV3640_AUTO_DETECT_DVP_INTERFACE_SENSOR
+
+config CANDIS_CAMERA_PROFILE_OV3660
+    bool "OV3660"
+    select CAMERA_OV3660
+    select CAMERA_OV3660_AUTO_DETECT_DVP_INTERFACE_SENSOR
+
+config CANDIS_CAMERA_PROFILE_OV5640
+    bool "OV5640"
+    select CAMERA_OV5640
+    select CAMERA_OV5640_AUTO_DETECT_DVP_INTERFACE_SENSOR
+
+config CANDIS_CAMERA_PROFILE_SC030IOT
+    bool "SC030IOT"
+    select CAMERA_SC030IOT
+    select CAMERA_SC030IOT_AUTO_DETECT_DVP_INTERFACE_SENSOR
+
+config CANDIS_CAMERA_PROFILE_SC101IOT
+    bool "SC101IOT"
+    select CAMERA_SC101IOT
+    select CAMERA_SC101IOT_AUTO_DETECT_DVP_INTERFACE_SENSOR
+
+config CANDIS_CAMERA_PROFILE_SC2336
+    bool "SC2336"
+    select CAMERA_SC2336
+    select CAMERA_SC2336_AUTO_DETECT_DVP_INTERFACE_SENSOR
+
+config CANDIS_CAMERA_PROFILE_SP0A39
+    bool "SP0A39"
+    select CAMERA_SP0A39
+    select CAMERA_SP0A39_AUTO_DETECT_DVP_INTERFACE_SENSOR
+
+endchoice
+
+config CANDIS_CAMERA_DOCK_V12
+    bool "Use the formal Candis Dock v1.2 U7 camera connector"
+    default n
+    depends on !CANDIS_CAMERA_FIXTURE
+    depends on !CANDIS_CAMERA_ENABLE_ALL_DVP_SENSORS
+    help
+        Use the DVP, XCLK and shared expansion-I2C mapping from the formal Dock
+        v1.2 U7 schematic. U7 has no dedicated RESET or PWDN pin.
+
+config CANDIS_CAMERA_DOCK_V12_MANAGE_SUPPLIES
+    bool "Enable camera and DC1SW supplies in the Dock example"
+    default n
+    depends on CANDIS_CAMERA_DOCK_V12
+    help
+        Enable this only when a module-specific voltage profile is supplied
+        and the total DC1SW load is known.
+
+config CANDIS_CAMERA_DOCK_V12_ENABLE_BLDO1
+    bool "Enable BLDO1 at the configured voltage"
+    default n
+    depends on CANDIS_CAMERA_DOCK_V12_MANAGE_SUPPLIES
+
+config CANDIS_CAMERA_DOCK_V12_BLDO1_MV
+    int "BLDO1 voltage in mV"
+    range 500 3500
+    default 2800
+    depends on CANDIS_CAMERA_DOCK_V12_MANAGE_SUPPLIES && CANDIS_CAMERA_DOCK_V12_ENABLE_BLDO1
+
+config CANDIS_CAMERA_DOCK_V12_ENABLE_ALDO3
+    bool "Enable ALDO3 at the configured voltage"
+    default n
+    depends on CANDIS_CAMERA_DOCK_V12_MANAGE_SUPPLIES
+
+config CANDIS_CAMERA_DOCK_V12_ALDO3_MV
+    int "ALDO3 voltage in mV"
+    range 500 3500
+    default 1500
+    depends on CANDIS_CAMERA_DOCK_V12_MANAGE_SUPPLIES && CANDIS_CAMERA_DOCK_V12_ENABLE_ALDO3
+
+config CANDIS_CAMERA_DOCK_V12_ENABLE_ALDO4
+    bool "Enable ALDO4 at the configured voltage"
+    default n
+    depends on CANDIS_CAMERA_DOCK_V12_MANAGE_SUPPLIES
+
+config CANDIS_CAMERA_DOCK_V12_ALDO4_MV
+    int "ALDO4 voltage in mV"
+    range 500 3500
+    default 2800
+    depends on CANDIS_CAMERA_DOCK_V12_MANAGE_SUPPLIES && CANDIS_CAMERA_DOCK_V12_ENABLE_ALDO4
+
+if CANDIS_CAMERA_FIXTURE || CANDIS_CAMERA_DOCK_V12
+
+config CANDIS_CAMERA_FIXTURE_PWDN_GPIO
+    bool "Drive OV5640 PWDN using GPIO40"
+    default y
+    depends on CANDIS_CAMERA_FIXTURE
+    help
+        Keep enabled when GPIO40 drives the sensor's active-high PWDN.
+        Disable when the module holds PWDN low in hardware.
 
 config CANDIS_CAMERA_MANAGE_PANEL_POWER
     bool "Allow the example to enable the AMOLED rail"
@@ -26,40 +224,24 @@ config CANDIS_CAMERA_STILL
 
 config CANDIS_CAMERA_SAVE_JPEG
     bool "Save the still frame as a JPEG on the fixture TF card"
-    depends on CANDIS_CAMERA_STILL
+    depends on CANDIS_CAMERA_STILL && CANDIS_CAMERA_FIXTURE
     default n
     help
         For the Candis validation fixture. After releasing the camera,
         allow the storage driver to enable DC1SW and create a new JPEG.
 
 config CANDIS_CAMERA_TEST_PATTERN
-    bool "Use the OV5640 sensor test pattern"
+    bool "Use the selected sensor's test pattern"
     default n
+    depends on !CANDIS_CAMERA_ENABLE_ALL_DVP_SENSORS
 
 config CANDIS_CAMERA_YUYV_RGB565
-    bool "Convert OV5640 YUYV to RGB565 with the DVP peripheral"
-    depends on CAMERA_OV5640_DVP_DEFAULT_FMT_YUV422_YUYV_800X600_10FPS
+    bool "Convert YUYV to RGB565 with the DVP peripheral"
+    depends on !CANDIS_CAMERA_ENABLE_ALL_DVP_SENSORS
     default n
     help
         Requires ESP Video to advertise RGB565X for the active YUYV
         sensor mode. Applies the documented converter output byte order.
-
-config CANDIS_CAMERA_MANUAL_CONTROLS
-    bool "Verify and preview manual OV5640 exposure, gain, white balance and ISP settings"
-    depends on !CANDIS_CAMERA_TEST_PATTERN
-    default n
-    help
-        Apply exposure of one quarter of the active frame length,
-        2x analog gain, unity white-balance gains and a luma adjustment.
-        Verify register readback before preview or still capture.
-
-config CANDIS_CAMERA_CONTROL_CONSOLE
-    bool "Accept OV5640 tuning commands during live preview"
-    depends on ESP_CONSOLE_USB_SERIAL_JTAG && !CANDIS_CAMERA_STILL && !CANDIS_CAMERA_TEST_PATTERN
-    default n
-    help
-        Read short commands from USB Serial/JTAG between frames without
-        blocking the capture task on console input.
 
 endif
 

@@ -1,0 +1,26 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+#pragma once
+
+#include "bsp/candis_camera_profile.h"
+#include "sdkconfig.h"
+
+extern const candis_camera_profile_t candis_camera_profile_bf20a6;
+extern const candis_camera_profile_t candis_camera_profile_bf3031;
+extern const candis_camera_profile_t candis_camera_profile_bf3045;
+extern const candis_camera_profile_t candis_camera_profile_bf3925;
+extern const candis_camera_profile_t candis_camera_profile_bf3a03;
+extern const candis_camera_profile_t candis_camera_profile_gc0308;
+extern const candis_camera_profile_t candis_camera_profile_gc032a;
+extern const candis_camera_profile_t candis_camera_profile_gc2145;
+extern const candis_camera_profile_t candis_camera_profile_mt9d111;
+extern const candis_camera_profile_t candis_camera_profile_ov2640;
+extern const candis_camera_profile_t candis_camera_profile_ov3640;
+extern const candis_camera_profile_t candis_camera_profile_ov3660;
+extern const candis_camera_profile_t candis_camera_profile_ov5640;
+extern const candis_camera_profile_t candis_camera_profile_sc030iot;
+extern const candis_camera_profile_t candis_camera_profile_sc101iot;
+extern const candis_camera_profile_t candis_camera_profile_sc2336;
+extern const candis_camera_profile_t candis_camera_profile_sp0a39;
+
+const candis_camera_profile_t *candis_camera_profile_find_id(const esp_cam_sensor_id_t *id);
+bool candis_camera_profile_can_read_control(const candis_camera_profile_t *profile, candis_camera_control_id_t control);

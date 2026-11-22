@@ -10,8 +10,8 @@ targets:
 dependencies:
   idf: ">=6.1,<6.3"
   espressif/esp_video:
-    version: "2.5.0"
+    version: "2.6.0"
     public: true
   espressif/esp_cam_sensor:
-    version: "2.6.0"
+    version: "2.7.0"
     public: true

@@ -46,7 +46,7 @@ static void inspect_flash(void)
 
 void app_main(void)
 {
-    ESP_ERROR_CHECK(candis_example_usb_start(CANDIS_EXAMPLE_USB_CONSOLE, true));
+    ESP_ERROR_CHECK_WITHOUT_ABORT(candis_example_usb_start(CANDIS_EXAMPLE_USB_CONSOLE, true));
     vTaskDelay(pdMS_TO_TICKS(1200));
     ESP_LOGI(TAG, "FLASH_READY commands=I:inspect");
     inspect_flash();

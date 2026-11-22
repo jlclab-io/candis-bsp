@@ -73,6 +73,7 @@ SOURCE = r"""
 #include <stddef.h>
 #include <string.h>
 #include "bsp/candis_storage.h"
+#include "esp_idf_version.h"
 
 static bool locked, powered, inserted, detect_enabled, readonly, manage;
 static bool host_started, slot_started, fail_slot;
@@ -259,6 +260,14 @@ int main(void)
     assert(bsp_sdcard_sdspi_mount(NULL) == ESP_ERR_INVALID_ARG);
 
     const candis_storage_mount_config_t read_only = {.read_only = true};
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 2, 0)
+    const candis_storage_mount_config_t *mount_config = &read_only;
+    const bool expected_readonly = true;
+#else
+    const candis_storage_mount_config_t read_write = {0};
+    const candis_storage_mount_config_t *mount_config = &read_write;
+    const bool expected_readonly = false;
+#endif
     sdmmc_card_t *card;
     bool present = true;
     assert(candis_storage_detect_start(CANDIS_STORAGE_EXPANSION) == ESP_ERR_INVALID_STATE);
@@ -268,18 +277,28 @@ int main(void)
     assert(candis_storage_detect_start(CANDIS_STORAGE_EXPANSION) == ESP_OK);
     assert(references == 1 && !manage && detect_enabled);
     assert(candis_storage_detect_read(&present) == ESP_OK && !present);
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 2, 0)
     assert(candis_storage_mount_with_config("/card", CANDIS_STORAGE_EXPANSION, &read_only, &card) == ESP_ERR_NOT_FOUND);
+#else
+    assert(candis_storage_mount_with_config("/card", CANDIS_STORAGE_EXPANSION, &read_only, &card) == ESP_ERR_NOT_SUPPORTED);
+#endif
     assert(mounts == 0 && card == NULL);
     assert(candis_storage_mount("/card", CANDIS_STORAGE_FIXTURE, false, &card) == ESP_ERR_INVALID_STATE);
 
     inserted = true;
     assert(candis_storage_detect_read(&present) == ESP_OK && present);
+#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(6, 2, 0)
+    card = &test_card;
+    assert(candis_storage_mount_with_config("/card", CANDIS_STORAGE_EXPANSION, &read_only, &card) ==
+           ESP_ERR_NOT_SUPPORTED);
+    assert(card == NULL && mounts == 0 && references == 1 && detect_enabled);
+#endif
     mount_error = ESP_FAIL;
-    assert(candis_storage_mount_with_config("/card", CANDIS_STORAGE_EXPANSION, &read_only, &card) == ESP_FAIL);
-    assert(readonly && detect_enabled && references == 1 && card == NULL);
+    assert(candis_storage_mount_with_config("/card", CANDIS_STORAGE_EXPANSION, mount_config, &card) == ESP_FAIL);
+    assert(readonly == expected_readonly && detect_enabled && references == 1 && card == NULL);
     mount_error = ESP_OK;
-    assert(candis_storage_mount_with_config("/card", CANDIS_STORAGE_EXPANSION, &read_only, &card) == ESP_OK);
-    assert(card == &test_card && readonly && references == 2);
+    assert(candis_storage_mount_with_config("/card", CANDIS_STORAGE_EXPANSION, mount_config, &card) == ESP_OK);
+    assert(card == &test_card && readonly == expected_readonly && references == 2);
     assert(candis_storage_detect_stop() == ESP_ERR_INVALID_STATE);
     inserted = false;
     assert(candis_storage_detect_read(&present) == ESP_OK && !present);
@@ -289,47 +308,60 @@ int main(void)
     assert(candis_storage_unmount() == ESP_OK && unmounts == 1 && detect_enabled && references == 1);
 
     inserted = true;
-    assert(candis_storage_mount_with_config("/card", CANDIS_STORAGE_EXPANSION, &read_only, &card) == ESP_OK);
+    assert(candis_storage_mount_with_config("/card", CANDIS_STORAGE_EXPANSION, mount_config, &card) == ESP_OK);
     input_error = ESP_FAIL;
     assert(candis_storage_unmount() == ESP_FAIL && unmounts == 2 && references == 1);
     assert(candis_storage_detect_read(&present) == ESP_ERR_INVALID_STATE);
+    input_error = ESP_OK;
+    assert(candis_storage_unmount() == ESP_OK && unmounts == 2 && references == 1 && detect_enabled);
+    assert(candis_storage_detect_read(&present) == ESP_OK && present);
     power_release_error = ESP_FAIL;
     assert(candis_storage_detect_stop() == ESP_FAIL && references == 1 && !detect_enabled);
     power_release_error = ESP_OK;
+    assert(candis_storage_detect_stop() == ESP_OK && references == 0);
+
+    inserted = true;
+    assert(candis_storage_detect_start(CANDIS_STORAGE_EXPANSION) == ESP_OK && references == 1);
+    assert(bsp_sdcard_mount() == ESP_OK && references == 2);
+    input_error = ESP_FAIL;
+    assert(bsp_sdcard_unmount() == ESP_FAIL && unmounts == 3 && references == 1);
+    input_error = ESP_OK;
+    assert(bsp_sdcard_unmount() == ESP_OK && unmounts == 3 && references == 1 && detect_enabled);
+    assert(candis_storage_detect_read(&present) == ESP_OK && present);
     assert(candis_storage_detect_stop() == ESP_OK && references == 0);
 
     input_error = ESP_OK;
     expected_pin = CANDIS_FIXTURE_SD_CD;
     assert(candis_storage_mount("/card", CANDIS_STORAGE_FIXTURE, true, &card) == ESP_OK);
     assert(card == &test_card && !readonly && manage && references == 1);
-    assert(candis_storage_unmount() == ESP_OK && references == 0 && reset_pins == 24);
+    assert(candis_storage_unmount() == ESP_OK && references == 0 && reset_pins == 30);
 
     expected_pin = CANDIS_EXP_SD_CD;
     assert(bsp_sdcard_mount() == ESP_OK && bsp_sdcard_get_handle() == &test_card);
     assert(candis_storage_unmount() == ESP_ERR_INVALID_STATE && references == 1);
     reset_error = ESP_FAIL;
-    assert(bsp_sdcard_unmount() == ESP_FAIL && references == 1 && unmounts == 4);
+    assert(bsp_sdcard_unmount() == ESP_FAIL && references == 1 && unmounts == 5);
     assert(bsp_sdcard_get_handle() == NULL);
     assert(bsp_sdcard_mount() == ESP_ERR_INVALID_STATE);
     reset_error = ESP_OK;
-    assert(bsp_sdcard_unmount() == ESP_OK && references == 0 && unmounts == 4);
+    assert(bsp_sdcard_unmount() == ESP_OK && references == 0 && unmounts == 5);
     assert(bsp_sdcard_unmount() == ESP_OK);
 
     const esp_vfs_fat_sdmmc_mount_config_t read_only_mount = {
         .max_files = 9, .read_only = true, .format_if_mount_failed = false,
     };
     bsp_sdcard_cfg_t bsp_config = {.mount = &read_only_mount};
-    assert(bsp_sdcard_sdmmc_mount(&bsp_config) == ESP_OK && readonly && mounts == 6);
-    assert(bsp_sdcard_unmount() == ESP_OK && unmounts == 5);
+    assert(bsp_sdcard_sdmmc_mount(&bsp_config) == ESP_OK && readonly && mounts == 7);
+    assert(bsp_sdcard_unmount() == ESP_OK && unmounts == 6);
     const esp_vfs_fat_sdmmc_mount_config_t format_mount = {
         .max_files = 1, .format_if_mount_failed = true,
     };
     bsp_config.mount = &format_mount;
-    assert(bsp_sdcard_sdmmc_mount(&bsp_config) == ESP_ERR_NOT_SUPPORTED && mounts == 6);
+    assert(bsp_sdcard_sdmmc_mount(&bsp_config) == ESP_ERR_NOT_SUPPORTED && mounts == 7);
 
     dock_result = ESP_ERR_NOT_FOUND;
     assert(bsp_feature_enable(BSP_FEATURE_SD, true) == ESP_ERR_NOT_FOUND && references == 0);
-    assert(bsp_sdcard_mount() == ESP_ERR_NOT_FOUND && !detect_enabled && references == 0 && mounts == 6);
+    assert(bsp_sdcard_mount() == ESP_ERR_NOT_FOUND && !detect_enabled && references == 0 && mounts == 7);
     dock_result = ESP_OK;
     console_result = ESP_ERR_INVALID_STATE;
     assert(bsp_feature_enable(BSP_FEATURE_SD, true) == ESP_ERR_INVALID_STATE && references == 0);

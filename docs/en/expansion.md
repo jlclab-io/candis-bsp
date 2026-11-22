@@ -112,6 +112,8 @@ On Dock rev. 1.2, LEFT is U6 and RIGHT is U7. Both use a `C46635855` dual-row he
 
 The two slots directly share GPIO35, EXP_SCL, EXP_SDA, DC1SW, ALDO3, ALDO4, BLDO1, and ground. U6.10 also shares GPIO39 with TF card detect and its pull-up. The slots have a common supply domain without individual power switches, presence contacts, address select, or bus isolation. Q3 is on the U10 branch.
 
+The camera example uses U7 for 8-bit DVP. GPIO46–53 carry D0–D7. GPIO54, GPIO55, GPIO56 and GPIO57 carry PCLK, XCLK, VSYNC and HSYNC respectively. SCCB shares EXP_SCL and EXP_SDA. U7 has no dedicated RESET or PWDN signal. Match the module's supply rails and control signals before connecting it.
+
 ## Locations and addresses
 
 | Location | 7-bit address | A2/A1/A0 | Basis |

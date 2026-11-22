@@ -9,7 +9,9 @@ typedef enum {
     CANDIS_EXAMPLE_USB_ECHO,
 } candis_example_usb_mode_t;
 
-/** Start native OTG CDC and preserve the boot console. Requires the example control task. */
+/** Start native OTG CDC. Console redirection requires ESP-IDF 6.2 or later.
+ * Echo mode supports ESP-IDF 6.1. Requires the example control task.
+ */
 esp_err_t candis_example_usb_start(candis_example_usb_mode_t mode, bool allow_download);
 
 /** Detach CDC and release the OTG device before sleeping. */

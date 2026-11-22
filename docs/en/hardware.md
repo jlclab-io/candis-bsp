@@ -33,6 +33,7 @@ The `candis` component targets Candis revision 1.2. The board uses an ESP32-S31 
 | TF card | Four-bit SDMMC, D0–D3 GPIO20–23, CLK GPIO24, CMD GPIO25. Card detect on Dock is GPIO39 |
 | Motion | BMI270 at `0x68` on main I²C, supplied by DC1SW. INT1 connects to GPIO38. The BSP polls the sensor |
 | M1 motor | GPIO5 drives an active-high low-side switch. BLDO2 supplies the motor at 2700 mV during a BSP pulse. Confirm the fitted load and USB input |
-| OV5640 camera | GPIO39/40 for control and GPIO46–57 for DVP and XCLK. Use the [camera wiring profile](../../components/candis-camera/README.md#custom-wiring) for your hardware |
+| OV5640 camera | The fixture uses GPIO39 for reset, GPIO40 for optional PWDN control, and GPIO46–57 for DVP and XCLK. Configure these signals in the [application](../../components/candis-camera/README.md#application-wiring) |
+| Dock camera connector | 8-bit DVP on GPIO46–57, SCCB on expansion I²C GPIO58/59, and PMU-controlled BLDO1, DC1SW, ALDO3, and ALDO4 supply pins. See the [U7 connector pin map](expansion.md#dock-20-pin-headers) |
 
 See [Expansion hardware](expansion.md) for the BTB and Dock connector pinouts.

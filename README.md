@@ -65,7 +65,7 @@ Power off before fitting a baseboard. Connect one baseboard at a time across bot
 - [**Minimal**](examples/candis_minimal) exercises I²C ownership and release recovery without LVGL.
 - [**Display**](examples/display) brings up the AMOLED and LVGL touch UI.
 - [**Audio recorder**](examples/audio/README.md) and [**music player**](examples/music_player/README.md) demo stereo recording and playback.
-- [**Camera**](examples/camera) previews and captures frames from an OV5640 module.
+- [**Camera**](examples/camera) selects a DVP sensor profile for capture or AMOLED preview.
 - [**Dock**](examples/dock/README.md) and [**expansion**](examples/expansion) exercise microSD and module discovery.
 
 [Browse all examples →](docs/en/examples.md)
@@ -74,7 +74,7 @@ Power off before fitting a baseboard. Connect one baseboard at a time across bot
 
 - [`candis`](components/candis/README.md) provides the core board's display, touch, RTC, power, and peripheral APIs.
 - [`tg28-esp`](components/tg28-esp/README.md) is the standalone TG28-ESP power management driver.
-- [`candis-camera`](components/candis-camera/README.md) provides configurable OV5640 DVP capture.
+- [`candis-camera`](components/candis-camera/README.md) provides configurable 8-bit DVP capture and controls for 17 Espressif sensor profiles.
 - [`candis-dock`](components/candis-dock/README.md) manages Dock identification, TF cards, and speaker routing.
 
 The BSP is in development preview. See [component support](docs/en/component-coverage.md) for hardware coverage.

@@ -28,11 +28,31 @@ GROUPS = {
     "camera": [
         ("camera", "default"),
         ("camera", "fixture"),
+        ("camera", "dvp_all"),
         ("camera", "jpeg"),
         ("camera", "yuyv"),
-        ("camera", "controls"),
-        ("camera", "manual_controls"),
-        ("camera", "manual"),
+        ("camera", "uyvy"),
+    ],
+    "camera-models-1": [
+        ("camera", "bf20a6"),
+        ("camera", "bf3031"),
+        ("camera", "bf3045"),
+        ("camera", "bf3925"),
+        ("camera", "bf3a03"),
+        ("camera", "gc0308"),
+        ("camera", "gc032a"),
+        ("camera", "gc2145"),
+        ("camera", "mt9d111"),
+    ],
+    "camera-models-2": [
+        ("camera", "ov2640"),
+        ("camera", "ov3640"),
+        ("camera", "ov3660"),
+        ("camera", "ov5640"),
+        ("camera", "sc030iot"),
+        ("camera", "sc101iot"),
+        ("camera", "sc2336"),
+        ("camera", "sp0a39"),
     ],
     "expansion": [
         ("expansion", "default"),
@@ -64,11 +84,27 @@ EXTRA_DEFAULTS = {
 CONFIG_FRAGMENTS = {
     ("diagnostics", "features"): ("features",),
     ("camera", "fixture"): ("fixture",),
+    ("camera", "dvp_all"): ("dvp_all",),
     ("camera", "jpeg"): ("fixture", "jpeg"),
-    ("camera", "yuyv"): ("fixture", "yuyv", "jpeg", "manual"),
-    ("camera", "controls"): ("fixture", "bench", "controls", "uyvy"),
-    ("camera", "manual_controls"): ("fixture", "controls", "uyvy", "manual"),
-    ("camera", "manual"): ("fixture", "manual"),
+    ("camera", "yuyv"): ("fixture", "yuyv", "jpeg"),
+    ("camera", "uyvy"): ("fixture", "uyvy"),
+    ("camera", "bf20a6"): ("bf20a6",),
+    ("camera", "bf3031"): ("bf3031",),
+    ("camera", "bf3045"): ("bf3045",),
+    ("camera", "bf3925"): ("bf3925",),
+    ("camera", "bf3a03"): ("bf3a03",),
+    ("camera", "gc0308"): ("gc0308",),
+    ("camera", "gc032a"): ("gc032a",),
+    ("camera", "gc2145"): ("gc2145",),
+    ("camera", "mt9d111"): ("mt9d111",),
+    ("camera", "ov2640"): ("ov2640",),
+    ("camera", "ov3640"): ("ov3640",),
+    ("camera", "ov3660"): ("ov3660",),
+    ("camera", "ov5640"): ("ov5640",),
+    ("camera", "sc030iot"): ("sc030iot",),
+    ("camera", "sc101iot"): ("sc101iot",),
+    ("camera", "sc2336"): ("sc2336",),
+    ("camera", "sp0a39"): ("sp0a39",),
     ("expansion", "dock_tf"): ("tf_test", "modules"),
     ("tf_card", "fixture"): ("fixture", "write_test"),
     ("adc", "fixture"): ("fixture",),
@@ -154,7 +190,11 @@ def plan_paths(paths: list[str]) -> list[str]:
             if project == "common":
                 selected.update(ALL_DEFAULT_IDS)
             elif project in DEFAULT_BUILD_BY_PROJECT:
-                if path.name.startswith("sdkconfig") or path.name == "Kconfig.projbuild":
+                if path.name.startswith("sdkconfig") or path.name in {"Kconfig.projbuild", "CMakeLists.txt"}:
+                    selected.update(builds_for_project(project))
+                elif project == "camera" and path.name in {"still_jpeg.c", "still_jpeg.h"}:
+                    selected.update({"camera:jpeg", "camera:yuyv"})
+                elif project == "camera":
                     selected.update(builds_for_project(project))
                 else:
                     selected.add(DEFAULT_BUILD_BY_PROJECT[project].build_id)
@@ -170,6 +210,11 @@ def plan_paths(paths: list[str]) -> list[str]:
         elif parts[:2] == (".github", "workflows") or parts[0] == "tools":
             if raw_path == "tools/ci_matrix.py":
                 selected.update(CORE_SMOKE_IDS)
+            elif raw_path == "tools/stage_registry_extension.py":
+                selected.update(CORE_SMOKE_IDS)
+                selected.add("dock:default")
+            elif raw_path == "tools/verify_tg28_consumer.sh":
+                selected.add("tg28:default")
             continue
         elif path.name in {"CMakeLists.txt", "Kconfig", "Kconfig.projbuild"} or suffix in {
             ".c",
@@ -190,9 +235,16 @@ def paths_need_host_tests(paths: list[str]) -> bool:
     for raw_path in paths:
         path = PurePosixPath(raw_path)
         parts = path.parts
+        if path.suffix.lower() == ".md":
+            continue
         if parts[0] in {"components", "examples", "tests"}:
             return True
-        if raw_path == "tools/ci_matrix.py":
+        if raw_path in {
+            "tools/ci_matrix.py",
+            "tools/stage_registry_extension.py",
+            "tools/verify_tg28_consumer.sh",
+            "tools/check_markdown_links.py",
+        }:
             return True
         if parts[0] not in {".github", "docs", "tools"} and path.suffix.lower() in {
             ".c",
@@ -206,6 +258,12 @@ def paths_need_host_tests(paths: list[str]) -> bool:
         }:
             return True
     return False
+
+
+def paths_need_docs_check(paths: list[str]) -> bool:
+    return any(raw_path == "tools/check_markdown_links.py" or
+               PurePosixPath(raw_path).suffix.lower() == ".md"
+               for raw_path in paths)
 
 
 def changed_paths_from_event() -> list[str]:
@@ -306,13 +364,15 @@ def main() -> int:
         if paths == [""]:
             builds = ALL_BUILD_IDS
             host_tests = True
+            docs_check = True
         else:
             builds = plan_paths(paths)
             host_tests = paths_need_host_tests(paths)
+            docs_check = paths_need_docs_check(paths)
         groups = groups_for_builds(builds)
         print(
             json.dumps(
-                {"builds": builds, "groups": groups, "host_tests": host_tests},
+                {"builds": builds, "groups": groups, "host_tests": host_tests, "docs_check": docs_check},
                 separators=(",", ":"),
             )
         )

@@ -6,9 +6,11 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #include "bsp/candis_camera.h"
+#include "candis_camera_profile_internal.h"
 #include "candis_camera_sensor.h"
 #include "esp_check.h"
 #include "esp_video_ioctl.h"
+#include "linux/v4l2-controls.h"
 
 #define CAPTURE V4L2_BUF_TYPE_VIDEO_CAPTURE
 #define BUFFER_COUNT 2
@@ -23,13 +25,40 @@ static struct {
     size_t length;
 } s_buffers[BUFFER_COUNT];
 
+typedef struct {
+    candis_camera_control_id_t id;
+    uint32_t v4l2_id;
+    uint32_t control_class;
+} control_map_t;
+
+static const control_map_t s_control_map[] = {
+    {CANDIS_CAMERA_CONTROL_GAIN, V4L2_CID_GAIN, V4L2_CTRL_CLASS_USER},
+    {CANDIS_CAMERA_CONTROL_EXPOSURE, V4L2_CID_EXPOSURE, V4L2_CTRL_CLASS_USER},
+    {CANDIS_CAMERA_CONTROL_HFLIP, V4L2_CID_HFLIP, V4L2_CTRL_CLASS_USER},
+    {CANDIS_CAMERA_CONTROL_VFLIP, V4L2_CID_VFLIP, V4L2_CTRL_CLASS_USER},
+    {CANDIS_CAMERA_CONTROL_AE_LEVEL, V4L2_CID_CAMERA_AE_LEVEL, V4L2_CTRL_CLASS_CAMERA},
+    {CANDIS_CAMERA_CONTROL_EXPOSURE_100US, V4L2_CID_EXPOSURE_ABSOLUTE, V4L2_CTRL_CLASS_CAMERA},
+    {CANDIS_CAMERA_CONTROL_JPEG_QUALITY, V4L2_CID_JPEG_COMPRESSION_QUALITY, V4L2_CTRL_CLASS_JPEG},
+    {CANDIS_CAMERA_CONTROL_TEST_PATTERN, V4L2_CID_TEST_PATTERN, V4L2_CTRL_CLASS_IMAGE_PROC},
+};
+
+static const control_map_t *find_control(candis_camera_control_id_t id)
+{
+    for (size_t i = 0; i < sizeof(s_control_map) / sizeof(s_control_map[0]); ++i) {
+        if (s_control_map[i].id == id) {
+            return &s_control_map[i];
+        }
+    }
+    return NULL;
+}
+
 static esp_err_t video_ioctl(unsigned long command, void *arg, const char *operation)
 {
     if (ioctl(s_fd, command, arg) == 0) {
         return ESP_OK;
     }
     const int error = errno;
-    if (command == VIDIOC_ENUM_FMT && error == EINVAL) {
+    if ((command == VIDIOC_ENUM_FMT || command == VIDIOC_ENUM_SENSOR_FMT) && error == EINVAL) {
         return ESP_ERR_NOT_FOUND;
     }
     ESP_LOGE(TAG, "%s: errno=%d", operation, error);
@@ -92,8 +121,7 @@ static esp_err_t start_stream(const candis_camera_stream_config_t *config, struc
     if (config && config->mode) {
         esp_cam_sensor_format_t active;
         ESP_RETURN_ON_ERROR(video_ioctl(VIDIOC_G_SENSOR_FMT, &active, "get sensor mode"), TAG, "configure sensor");
-        /* OV5640 in esp_cam_sensor 2.6.0 dereferences a NULL reset table for
-         * explicit format changes. ESP Video applies the Kconfig mode on open. */
+        /* ESP Video applies the configured sensor mode when opening the device. */
         const esp_cam_sensor_format_t *requested = config->mode;
         ESP_RETURN_ON_FALSE(requested->regs == active.regs && requested->format == active.format &&
                             requested->width == active.width && requested->height == active.height &&
@@ -147,7 +175,7 @@ esp_err_t candis_camera_stream_start(const candis_camera_stream_config_t *config
 static esp_err_t sensor_control(unsigned long request, uint32_t control_class,
                                 struct v4l2_ext_control *control, const char *operation)
 {
-    if (!s_streaming || s_borrowed) {
+    if (s_fd < 0 || s_borrowed) {
         return ESP_ERR_INVALID_STATE;
     }
     struct v4l2_ext_controls controls = {
@@ -158,28 +186,116 @@ static esp_err_t sensor_control(unsigned long request, uint32_t control_class,
     return video_ioctl(request, &controls, operation);
 }
 
-esp_err_t candis_camera_sensor_read_register(uint16_t address, uint8_t *value)
+esp_err_t candis_camera_control_query(candis_camera_control_id_t id,
+                                      candis_camera_control_info_t *info)
 {
-    esp_cam_sensor_reg_val_t reg = {.regaddr = address};
-    struct v4l2_ext_control control = {
-        .id = ESP_CAM_SENSOR_IOC_G_REG, .p_u8 = (uint8_t *)&reg, .size = sizeof(reg),
+    if (!info) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    const control_map_t *map = find_control(id);
+    if (!map) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (s_borrowed || (s_fd >= 0 && !s_streaming)) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    const candis_camera_profile_t *profile;
+    ESP_RETURN_ON_ERROR(candis_camera_get_active_profile(&profile), TAG, "identify camera for control");
+    ESP_RETURN_ON_FALSE(candis_camera_profile_supports_control(profile, id), ESP_ERR_NOT_SUPPORTED, TAG,
+                        "camera profile does not advertise this control");
+    if (id == CANDIS_CAMERA_CONTROL_TEST_PATTERN) {
+        *info = (candis_camera_control_info_t) {
+            .id = id,
+            .v4l2_id = map->v4l2_id,
+            .type = V4L2_CTRL_TYPE_BOOLEAN,
+            .flags = V4L2_CTRL_FLAG_WRITE_ONLY,
+            .minimum = 0,
+            .maximum = 1,
+            .step = 1,
+            .default_value = 0,
+        };
+        memcpy(info->name, "Test Pattern", sizeof("Test Pattern"));
+        return ESP_OK;
+    }
+    const bool opened_here = s_fd < 0;
+    if (opened_here) {
+        ESP_RETURN_ON_ERROR(open_device(), TAG, "open camera for control query");
+    }
+    struct v4l2_query_ext_ctrl query = {.id = map->v4l2_id};
+    const esp_err_t err = video_ioctl(VIDIOC_QUERY_EXT_CTRL, &query, "query camera control");
+    const esp_err_t cleanup = opened_here ? candis_camera_stream_stop() : ESP_OK;
+    if (cleanup != ESP_OK) {
+        return cleanup;
+    }
+    if (err == ESP_ERR_INVALID_ARG) {
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+    if (err != ESP_OK) {
+        return err;
+    }
+    *info = (candis_camera_control_info_t) {
+        .id = id,
+        .v4l2_id = map->v4l2_id,
+        .type = query.type,
+        .flags = query.flags,
+        .minimum = query.minimum,
+        .maximum = query.maximum,
+        .step = query.step,
+        .default_value = query.default_value,
     };
-    const esp_err_t err = sensor_control(VIDIOC_G_EXT_CTRLS, V4L2_CTRL_CLASS_ESP_CAM_IOCTL,
-                                         &control, "read sensor register");
+    memcpy(info->name, query.name, sizeof(info->name));
+    info->name[sizeof(info->name) - 1] = 0;
+    if (!candis_camera_profile_can_read_control(profile, id)) {
+        info->flags |= V4L2_CTRL_FLAG_WRITE_ONLY;
+    }
+    return ESP_OK;
+}
+
+esp_err_t candis_camera_control_get(candis_camera_control_id_t id, int32_t *value)
+{
+    if (!value) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    const control_map_t *map = find_control(id);
+    if (!map) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (!s_streaming || s_borrowed) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    const candis_camera_profile_t *profile;
+    ESP_RETURN_ON_ERROR(candis_camera_get_active_profile(&profile), TAG, "identify camera for control");
+    if (!candis_camera_profile_can_read_control(profile, id)) {
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+    struct v4l2_ext_control control = {.id = map->v4l2_id};
+    const esp_err_t err = sensor_control(VIDIOC_G_EXT_CTRLS, map->control_class,
+                                         &control, "get camera control");
     if (err == ESP_OK) {
-        *value = reg.value;
+        *value = control.value;
     }
     return err;
 }
 
-esp_err_t candis_camera_sensor_write_register(uint16_t address, uint8_t value)
+esp_err_t candis_camera_control_set(candis_camera_control_id_t id, int32_t value)
 {
-    esp_cam_sensor_reg_val_t reg = {.regaddr = address, .value = value};
-    struct v4l2_ext_control control = {
-        .id = ESP_CAM_SENSOR_IOC_S_REG, .p_u8 = (uint8_t *)&reg, .size = sizeof(reg),
-    };
-    return sensor_control(VIDIOC_S_EXT_CTRLS, V4L2_CTRL_CLASS_ESP_CAM_IOCTL,
-                          &control, "write sensor register");
+    const control_map_t *map = find_control(id);
+    if (!map) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (!s_streaming || s_borrowed) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    const candis_camera_profile_t *profile;
+    ESP_RETURN_ON_ERROR(candis_camera_get_active_profile(&profile), TAG, "identify camera for control");
+    ESP_RETURN_ON_FALSE(candis_camera_profile_supports_control(profile, id), ESP_ERR_NOT_SUPPORTED, TAG,
+                        "camera profile does not advertise this control");
+    if (id == CANDIS_CAMERA_CONTROL_TEST_PATTERN && (value < 0 || value > 1)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    struct v4l2_ext_control control = {.id = map->v4l2_id, .value = value};
+    return sensor_control(VIDIOC_S_EXT_CTRLS, map->control_class,
+                          &control, "set camera control");
 }
 
 esp_err_t candis_camera_read_sensor_id(esp_cam_sensor_id_t *id)
@@ -187,34 +303,31 @@ esp_err_t candis_camera_read_sensor_id(esp_cam_sensor_id_t *id)
     if (!id) {
         return ESP_ERR_INVALID_ARG;
     }
+    const bool opened_here = s_fd < 0;
+    if (opened_here) {
+        ESP_RETURN_ON_ERROR(open_device(), TAG, "open camera for sensor ID");
+    }
     esp_cam_sensor_id_t value = {0};
     struct v4l2_ext_control control = {
         .id = ESP_CAM_SENSOR_IOC_G_CHIP_ID, .p_u8 = (uint8_t *)&value, .size = sizeof(value),
     };
     esp_err_t err = sensor_control(VIDIOC_G_EXT_CTRLS, V4L2_CTRL_CLASS_ESP_CAM_IOCTL, &control, "read sensor ID");
-    if (err == ESP_OK) {
+    const esp_err_t cleanup = opened_here ? candis_camera_stream_stop() : ESP_OK;
+    if (err == ESP_OK && cleanup == ESP_OK) {
         *id = value;
     }
-    return err;
+    return err == ESP_OK ? cleanup : err;
 }
 
 esp_err_t candis_camera_set_flip(bool horizontal, bool enabled)
 {
-    ESP_RETURN_ON_ERROR(candis_ov5640_end_pending_group(), TAG, "recover sensor group");
-    struct v4l2_ext_control control = {
-        .id = horizontal ? V4L2_CID_HFLIP : V4L2_CID_VFLIP, .value = enabled,
-    };
-    return sensor_control(VIDIOC_S_EXT_CTRLS, V4L2_CTRL_CLASS_USER, &control, "set sensor flip");
+    return candis_camera_control_set(horizontal ? CANDIS_CAMERA_CONTROL_HFLIP :
+                                     CANDIS_CAMERA_CONTROL_VFLIP, enabled);
 }
 
 esp_err_t candis_camera_set_test_pattern(bool enabled)
 {
-    ESP_RETURN_ON_ERROR(candis_ov5640_end_pending_group(), TAG, "recover sensor group");
-    int pattern = enabled;
-    struct v4l2_ext_control control = {
-        .id = ESP_CAM_SENSOR_IOC_S_TEST_PATTERN, .p_u8 = (uint8_t *)&pattern, .size = sizeof(pattern),
-    };
-    return sensor_control(VIDIOC_S_EXT_CTRLS, V4L2_CTRL_CLASS_ESP_CAM_IOCTL, &control, "set test pattern");
+    return candis_camera_control_set(CANDIS_CAMERA_CONTROL_TEST_PATTERN, enabled);
 }
 
 esp_err_t candis_camera_frame_acquire(candis_camera_frame_t *frame)
@@ -225,7 +338,6 @@ esp_err_t candis_camera_frame_acquire(candis_camera_frame_t *frame)
     if (!s_streaming || s_borrowed) {
         return ESP_ERR_INVALID_STATE;
     }
-    ESP_RETURN_ON_ERROR(candis_ov5640_end_pending_group(), TAG, "recover sensor group");
     s_frame = (struct v4l2_buffer) {.type = CAPTURE, .memory = V4L2_MEMORY_MMAP};
     ESP_RETURN_ON_ERROR(video_ioctl(VIDIOC_DQBUF, &s_frame, "dequeue frame"), TAG, "capture frame");
     s_borrowed = true;
@@ -288,19 +400,35 @@ esp_err_t candis_camera_stream_stop(void)
     }
     if (s_streaming) {
         enum v4l2_buf_type type = CAPTURE;
-        ESP_RETURN_ON_ERROR(candis_ov5640_end_pending_group(), TAG, "recover sensor group before stopping");
-        ESP_RETURN_ON_ERROR(video_ioctl(VIDIOC_STREAMOFF, &type, "stop capture"), TAG, "stop DVP stream");
+        const esp_err_t stop = video_ioctl(VIDIOC_STREAMOFF, &type, "stop capture");
+        if (stop != ESP_OK) {
+            return stop;
+        }
         s_streaming = false;
         s_borrowed = false;
     }
     for (unsigned i = 0; i < BUFFER_COUNT; ++i) {
         if (s_buffers[i].length) {
-            ESP_RETURN_ON_FALSE(munmap(s_buffers[i].address, s_buffers[i].length) == 0, ESP_FAIL, TAG, "unmap frame buffer");
-            s_buffers[i].length = 0;
+            if (munmap(s_buffers[i].address, s_buffers[i].length) == 0) {
+                s_buffers[i].length = 0;
+            } else {
+                ESP_LOGE(TAG, "unmap frame buffer %u: errno=%d", i, errno);
+            }
         }
+    }
+    if (s_buffers[0].length || s_buffers[1].length) {
+        return ESP_FAIL;
     }
     const int fd = s_fd;
     s_fd = -1;
-    ESP_RETURN_ON_FALSE(close(fd) == 0, ESP_FAIL, TAG, "close DVP errno=%d", errno);
+    if (close(fd) != 0) {
+        ESP_LOGE(TAG, "close DVP: errno=%d", errno);
+        return ESP_FAIL;
+    }
     return ESP_OK;
+}
+
+bool candis_camera_stream_is_open(void)
+{
+    return s_fd >= 0;
 }

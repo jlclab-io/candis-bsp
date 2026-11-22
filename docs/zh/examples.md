@@ -12,7 +12,7 @@
 | [显示](../../examples/display) | ALDO1 上电后体验 LVGL、AMOLED 刷新及触控。 |
 | [录音机](../../examples/audio/README.md) | 用触摸屏录放双声道片段。接好麦克风和扬声器，并为 ALDO1/ALDO2 供电。 |
 | [音乐播放器](../../examples/music_player/README.md) | 播放内置曲目并选择扬声器声道，需要显示和音频供电。 |
-| [摄像头](../../examples/camera) | 在 AMOLED 上预览 OV5640。使用摄像头测试板配置，拍照和 JPEG 选项见[摄像头指南](../../components/candis-camera/README.md)。 |
+| [摄像头](../../examples/camera) | 按[摄像头指南](../../components/candis-camera/README.md)选择 DVP 型号取帧。AMOLED 可预览 RGB565、YUV422 和灰度画面。 |
 | [TF 卡](../../examples/tf_card) | 浏览 FAT 格式卡。按实际板型配置卡检测脚，并为 DC1SW 供电。 |
 | [扩展板](../../examples/expansion) | 识别 Dock 后浏览 TF 卡，可选探测模块地址。 |
 | [Dock](../../examples/dock/README.md) | 识别 Dock 并测试 TF 卡、BMI270、显示和扬声器。 |
@@ -41,7 +41,7 @@
 | --- | --- | --- |
 | TF 卡 | Candis Dock | 卡检测在 GPIO39 |
 | ADC | Candis Dock（LEFT 扩展座） | GPIO42 和 GPIO43 分别在 U6.20 和 U6.18 |
-| 摄像头 | OV5640 模块 | 复位和掉电由[摄像头接线配置](../../components/candis-camera/README.md#custom-wiring)控制 |
+| 摄像头 | Dock v1.2 U7 或 OV5640 验证夹具 | 按[摄像头接线配置](../../components/candis-camera/README.md#application-wiring)选择模组和供电 |
 | LED 和马达 | 核心板和 Dock | LED 用 GPIO37，M1 马达用 GPIO5 |
 
 使用 Dock TF 卡时，保持 LEFT U6 空置，或使其 GPIO39 线路保持高阻。使用 FAT 格式卡。使用核心板 LED 前，确保 U6.8 上的 GPIO37 可用。外接 ADC 信号须与板卡共地，并符合 0 dB 衰减档位的输入范围。

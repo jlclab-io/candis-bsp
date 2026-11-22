@@ -112,6 +112,8 @@ Dock v1.2 上的 LEFT 为 U6，RIGHT 为 U7，均为 `C46635855` 双排 20Pin。
 
 两槽各自的 GPIO35、EXP_SCL、EXP_SDA、DC1SW、ALDO3、ALDO4、BLDO1 和地分别直连共用。U6.10 的 GPIO39 另接 Dock 卡座的 CD 及其上拉。两槽按整条电源域供电，共用总线与地址空间。Q3 属于 U10 支路，U6 与 U7 之间保持直连。
 
+摄像头示例通过 U7 连接 8 位 DVP。GPIO46–53 对应 D0–D7，GPIO54、GPIO55、GPIO56、GPIO57 依次为 PCLK、XCLK、VSYNC、HSYNC。SCCB 共用 EXP_SCL 和 EXP_SDA。U7 无专用 RESET 或 PWDN，接入前需核对模组的供电和控制信号。
+
 ## 位置与地址
 
 | 位置 | 7 位地址 | A2/A1/A0 | 依据 |

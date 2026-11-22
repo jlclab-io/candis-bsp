@@ -116,7 +116,7 @@ static void host_task(void *arg)
 
 void app_main(void)
 {
-    ESP_ERROR_CHECK(candis_example_usb_start(CANDIS_EXAMPLE_USB_CONSOLE, true));
+    ESP_ERROR_CHECK_WITHOUT_ABORT(candis_example_usb_start(CANDIS_EXAMPLE_USB_CONSOLE, true));
     const esp_err_t nvs = nvs_flash_init();
     if (nvs != ESP_OK) {
         ESP_LOGE(TAG, "BLE_NVS %s", esp_err_to_name(nvs));

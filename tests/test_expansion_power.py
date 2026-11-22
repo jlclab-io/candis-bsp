@@ -120,6 +120,8 @@ int main(void)
     nack_next_read = true;
     assert(candis_expansion_ldo_acquire(CANDIS_EXPANSION_ALDO3, 1500, 5, &ldo) == ESP_OK);
     assert(ldo && enables == ALDO3 && registers[0x94] == (0xa0 | 10));
+    assert(candis_expansion_ldo_acquire(CANDIS_EXPANSION_ALDO3, 1500, 5, &ldo) == ESP_ERR_INVALID_STATE);
+    assert(ldo && bus_users == 1 && enables == ALDO3);
     assert(candis_expansion_ldo_acquire(CANDIS_EXPANSION_ALDO3, 1500, 5, &duplicate) == ESP_ERR_INVALID_STATE);
     assert(!duplicate && bus_users == 1);
     assert(candis_expansion_ldo_release(ldo) == ESP_OK && !enables &&

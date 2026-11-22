@@ -36,9 +36,9 @@ static SemaphoreHandle_t s_log_lock;
 static TaskHandle_t s_worker;
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 2, 0)
 static esp_stdio_handle_t s_sink;
+static int s_boot_input = -1;
 #endif
 static RingbufHandle_t s_output;
-static int s_boot_input = -1;
 static candis_example_usb_mode_t s_mode;
 static bool s_driver;
 static bool s_cdc;
@@ -281,6 +281,11 @@ static void service_task(void *arg)
 
 esp_err_t candis_example_usb_start(candis_example_usb_mode_t mode, bool allow_download)
 {
+#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(6, 2, 0)
+    if (mode == CANDIS_EXAMPLE_USB_CONSOLE) {
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+#endif
     if (!s_lock) {
         s_lock = xSemaphoreCreateMutex();
         ESP_RETURN_ON_FALSE(s_lock, ESP_ERR_NO_MEM, TAG, "allocate USB mutex");

@@ -91,7 +91,7 @@ void app_main(void)
 
 标准挂载使用 Dock 的 GPIO39，要求 DC1SW 已供电、UART0 已释放 GPIO58/59、U6 的 GPIO39 为高阻。BSP 先核对 EEPROM 描述符再使用 SDMMC。应用确认扩展负载后可以调用 `bsp_feature_enable(BSP_FEATURE_SD, true)` 建立 DC1SW，再调用挂载。默认挂载目录为 `/sdcard`，可通过 `CONFIG_BSP_SD_MOUNT_POINT` 配置。
 
-选择符合实物卡检测接线的存储配置。只读浏览时为 `candis_storage_mount_with_config()` 设置 `read_only = true`。挂载时禁用自动格式化。挂载期间由存储所属任务用 `candis_storage_check_card()` 轮询，并处理读写失败。检测到拔卡后，即使重插也保持 `ESP_ERR_NOT_FOUND`，直到关闭文件并卸载。应用负责关闭文件，BSP 负责驱动资源。独立卡检测的去抖由应用负责。
+选择符合实物卡检测接线的存储配置。ESP-IDF 6.2 及以上版本可通过 `candis_storage_mount_with_config()` 设置 `read_only = true` 浏览 TF 卡。ESP-IDF 6.1 收到此请求时返回 `ESP_ERR_NOT_SUPPORTED`。挂载时禁用自动格式化。挂载期间由存储所属任务用 `candis_storage_check_card()` 轮询，并处理读写失败。检测到拔卡后，即使重插也保持 `ESP_ERR_NOT_FOUND`，直到关闭文件并卸载。应用负责关闭文件，BSP 负责驱动资源。独立卡检测的去抖由应用负责。
 
 启用 `CONFIG_CANDIS_IMU` 读取加速度与角速度。用 `candis_imu_get_state()` 区分无器件、芯片不符、已检测和已初始化。用 `candis_imu_start_with_config()` 设置采样率和量程，用 `candis_imu_suspend()/resume()` 保留 DC1SW 并进入或退出高级省电。首个样本尚未就绪时返回 `ESP_ERR_NOT_FINISHED`。样本含以 39.0625 µs 为一计数的 24 位传感器时钟，以及以微秒表示的主机读取完成时间。比较传感器计数时按 24 位回卷计算。用 `candis_imu_read_temperature()` 读取芯片内部温度。
 
@@ -110,4 +110,4 @@ Candis PCM 接口提供 48 kHz 有符号立体声读写、帧数和超时，允�
 ## 扩展与摄像头
 
 - 调用 `candis_baseboard_probe()` 前释放 UART0 并确认 DC1SW 已上电。将返回的身份传给 [Dock](../../components/candis-dock/README.md) 接口。描述符兼容范围见 [BSP 支持](expansion.md#bsp-支持)。
-- [摄像头 API](../../components/candis-camera/README.md)由应用配置板级引脚、SCCB、时钟和电源回调。构建时选择 OV5640 模式。拍照时复制帧到应用内存，连续取流时借用并归还 DMA 帧。
+- [摄像头 API](../../components/candis-camera/README.md)由应用配置引脚、SCCB、XCLK 和资源回调。构建时选择 Espressif DVP 传感器和模式。拍照可将帧复制到应用内存，连续取流可借用并归还 DMA 帧。

@@ -28,3 +28,8 @@ static inline uint16_t camera_yuv_pixel(const uint8_t *pair, bool yuyv, unsigned
     const unsigned chroma = yuyv ? 1 : 0;
     return camera_yuv_to_rgb565(pair[2 * pixel + (1 - chroma)], pair[chroma], pair[chroma + 2], limited);
 }
+
+static inline uint16_t camera_gray_to_rgb565(uint8_t gray)
+{
+    return ((uint16_t)(gray >> 3) << 11) | ((uint16_t)(gray >> 2) << 5) | (gray >> 3);
+}

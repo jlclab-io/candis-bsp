@@ -2,7 +2,7 @@
 
 [Documentation](README.md) · [简体中文](../zh/usb.md)
 
-Candis uses the onboard USB-C connector for native USB OTG. The examples normally expose a USB CDC serial console after boot. During ROM download and after an application restart, the host may enumerate a different serial port.
+Candis uses the onboard USB-C connector for native USB OTG. ESP-IDF 6.2 or later redirects the example console to USB CDC. On ESP-IDF 6.1, console redirection returns `ESP_ERR_NOT_SUPPORTED` and the example continues with its boot console. During ROM download and after an application restart, the host may enumerate a different serial port.
 
 ## First installation
 

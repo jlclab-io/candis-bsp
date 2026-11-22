@@ -64,7 +64,7 @@ void app_main(void)
     if (esp_reset_reason() != ESP_RST_DEEPSLEEP) {
         s_cycles = 0;
     }
-    ESP_ERROR_CHECK(candis_example_usb_start(CANDIS_EXAMPLE_USB_CONSOLE, true));
+    ESP_ERROR_CHECK_WITHOUT_ABORT(candis_example_usb_start(CANDIS_EXAMPLE_USB_CONSOLE, true));
     vTaskDelay(pdMS_TO_TICKS(1000));
     report_ready();
     for (;;) {

@@ -34,7 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [core, camera, expansion, system]
+        group: [core, camera, camera-models-1, camera-models-2, expansion, system]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - uses: ./.github/actions/setup-esp32s31

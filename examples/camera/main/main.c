@@ -9,12 +9,6 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#ifdef CONFIG_CANDIS_CAMERA_CONTROL_CONSOLE
-#include "control_console.h"
-#endif
-#ifdef CONFIG_CANDIS_CAMERA_MANUAL_CONTROLS
-#include "bsp/candis_ov5640.h"
-#endif
 #ifdef CONFIG_CANDIS_CAMERA_SAVE_JPEG
 #include "driver/jpeg_encode.h"
 #include "still_jpeg.h"
@@ -27,24 +21,30 @@ static const char *TAG = "candis_camera_demo";
 static esp_err_t check_preview_format(struct v4l2_pix_format *pix, size_t *frame_bytes)
 {
     const bool yuv = pix->pixelformat == V4L2_PIX_FMT_UYVY || pix->pixelformat == V4L2_PIX_FMT_YUYV;
-    ESP_RETURN_ON_FALSE(pix->width == 800 && pix->height == 600 &&
-                        (yuv || pix->pixelformat == V4L2_PIX_FMT_RGB565 || pix->pixelformat == V4L2_PIX_FMT_RGB565X),
-                        ESP_ERR_NOT_SUPPORTED, TAG, "expected 800x600 RGB565 or YUV422 DVP");
+    const bool gray = pix->pixelformat == V4L2_PIX_FMT_GREY;
+    const bool rgb565 = pix->pixelformat == V4L2_PIX_FMT_RGB565 || pix->pixelformat == V4L2_PIX_FMT_RGB565X;
+    ESP_RETURN_ON_FALSE(pix->width >= 2 && pix->height >= 2 && pix->width <= UINT16_MAX &&
+                        (gray || rgb565 || yuv) && (!yuv || !(pix->width & 1)),
+                        ESP_ERR_NOT_SUPPORTED, TAG, "preview supports RGB565, YUV422, and grayscale DVP modes");
     ESP_RETURN_ON_FALSE(!yuv ||
                         ((pix->ycbcr_enc == V4L2_YCBCR_ENC_DEFAULT || pix->ycbcr_enc == V4L2_YCBCR_ENC_601) &&
                          (pix->quantization == V4L2_QUANTIZATION_DEFAULT ||
                           pix->quantization == V4L2_QUANTIZATION_FULL_RANGE ||
                           pix->quantization == V4L2_QUANTIZATION_LIM_RANGE)),
                         ESP_ERR_NOT_SUPPORTED, TAG, "unsupported YUV matrix or range");
-    const uint32_t row_bytes = pix->width * sizeof(uint16_t);
+    const size_t pixel_size = gray ? sizeof(uint8_t) : sizeof(uint16_t);
+    ESP_RETURN_ON_FALSE(pix->width <= SIZE_MAX / pixel_size, ESP_ERR_INVALID_SIZE, TAG, "camera row size overflow");
+    const size_t row_bytes = (size_t)pix->width * pixel_size;
     if (!pix->bytesperline) {
-        pix->bytesperline = row_bytes;
+        ESP_RETURN_ON_FALSE(row_bytes <= UINT32_MAX, ESP_ERR_INVALID_SIZE, TAG, "camera stride overflow");
+        pix->bytesperline = (uint32_t)row_bytes;
     }
-    ESP_RETURN_ON_FALSE(pix->bytesperline >= row_bytes && pix->bytesperline % sizeof(uint16_t) == 0 &&
+    ESP_RETURN_ON_FALSE(pix->bytesperline >= row_bytes && (gray || pix->bytesperline % sizeof(uint16_t) == 0) &&
                         pix->bytesperline <= SIZE_MAX / pix->height, ESP_ERR_INVALID_SIZE, TAG, "invalid DVP stride");
     *frame_bytes = (size_t)(pix->height - 1) * pix->bytesperline + row_bytes;
-    ESP_LOGI(TAG, "DVP 800x600 fourcc=0x%08" PRIx32 " stride=%" PRIu32 ", preview %dx%d",
-             pix->pixelformat, pix->bytesperline, BSP_LCD_H_RES, BSP_LCD_V_RES);
+    ESP_LOGI(TAG, "DVP %" PRIu32 "x%" PRIu32 " fourcc=0x%08" PRIx32 " stride=%" PRIu32
+             ", preview %dx%d", pix->width, pix->height, pix->pixelformat, pix->bytesperline,
+             BSP_LCD_H_RES, BSP_LCD_V_RES);
     return ESP_OK;
 }
 
@@ -53,12 +53,19 @@ static void crop_and_scale(const struct v4l2_pix_format *pix, const uint8_t *src
 {
     const bool yuyv = pix->pixelformat == V4L2_PIX_FMT_YUYV;
     const bool yuv = yuyv || pix->pixelformat == V4L2_PIX_FMT_UYVY;
+    const bool gray = pix->pixelformat == V4L2_PIX_FMT_GREY;
     const bool limited = pix->quantization == V4L2_QUANTIZATION_LIM_RANGE;
+    const unsigned crop_size = pix->width < pix->height ? pix->width : pix->height;
+    const unsigned top = (pix->height - crop_size) / 2;
     for (unsigned y = 0; y < BSP_LCD_V_RES; ++y) {
-        const unsigned source_y = y * pix->height / BSP_LCD_V_RES;
+        const unsigned source_y = top + y * crop_size / BSP_LCD_V_RES;
         const uint8_t *bytes = src + (size_t)source_y * pix->bytesperline;
         const uint16_t *row = (const uint16_t *)bytes;
-        if (yuv) {
+        if (gray) {
+            for (unsigned x = 0; x < BSP_LCD_H_RES; ++x) {
+                *dst++ = camera_gray_to_rgb565(bytes[columns[x]]);
+            }
+        } else if (yuv) {
             for (unsigned x = 0; x < BSP_LCD_H_RES; ++x) {
                 const unsigned col = columns[x];
                 *dst++ = camera_yuv_pixel(bytes + (col & ~1U) * 2, yuyv, col & 1U, limited);
@@ -77,9 +84,10 @@ static void crop_and_scale(const struct v4l2_pix_format *pix, const uint8_t *src
 
 static void prepare_crop(const struct v4l2_pix_format *format, uint16_t columns[BSP_LCD_H_RES])
 {
-    const unsigned left = (format->width - format->height) / 2;
+    const unsigned crop_size = format->width < format->height ? format->width : format->height;
+    const unsigned left = (format->width - crop_size) / 2;
     for (unsigned x = 0; x < BSP_LCD_H_RES; ++x) {
-        columns[x] = left + x * format->height / BSP_LCD_H_RES;
+        columns[x] = left + x * crop_size / BSP_LCD_H_RES;
     }
 }
 
@@ -94,15 +102,7 @@ static esp_err_t preview(const struct v4l2_pix_format *pix, size_t frame_bytes, 
     int64_t total_latency = 0, max_latency = 0;
     unsigned captured = 0, shown = 0, invalid = 0, consecutive_invalid = 0;
     bool first_frame = true;
-#ifdef CONFIG_CANDIS_CAMERA_CONTROL_CONSOLE
-    camera_control_console_help();
-#endif
     while (!candis_example_usb_download_pending()) {
-#ifdef CONFIG_CANDIS_CAMERA_CONTROL_CONSOLE
-        if (!camera_control_console_poll()) {
-            return ESP_OK;
-        }
-#endif
         candis_camera_frame_t frame;
         ESP_RETURN_ON_ERROR(candis_camera_frame_acquire(&frame), TAG, "capture preview frame");
         const int64_t dequeued = esp_timer_get_time();
@@ -167,63 +167,19 @@ static esp_err_t check_dvp_conversion(void)
 }
 #endif
 
-#ifdef CONFIG_CANDIS_CAMERA_MANUAL_CONTROLS
-static esp_err_t settle_control_group(void)
+static esp_err_t capture_payload(const struct v4l2_pix_format *format)
 {
-    /* Recycle both queued buffers and allow a further frame for the group update. */
-    for (unsigned frame = 0; frame < 3; ++frame) {
-        candis_camera_frame_t unused;
-        ESP_RETURN_ON_ERROR(candis_camera_frame_acquire(&unused), TAG, "wait for updated controls");
-        ESP_RETURN_ON_ERROR(candis_camera_frame_release(), TAG, "release settling frame");
-    }
+    candis_camera_frame_t frame;
+    ESP_RETURN_ON_ERROR(candis_camera_frame_acquire(&frame), TAG, "capture DVP payload");
+    const bool valid = frame.size && !(frame.flags & V4L2_BUF_FLAG_ERROR);
+    ESP_RETURN_ON_ERROR(candis_camera_frame_release(), TAG, "release DVP payload");
+    ESP_RETURN_ON_FALSE(valid, ESP_ERR_INVALID_RESPONSE, TAG, "invalid DVP payload");
+    ESP_LOGI(TAG, "Captured %" PRIu32 "x%" PRIu32 " fourcc=0x%08" PRIx32 " bytes=%zu",
+             format->width, format->height, format->pixelformat, frame.size);
     return ESP_OK;
 }
 
-static esp_err_t apply_manual_controls(void)
-{
-    candis_ov5640_controls_t before;
-    uint16_t frame_lines;
-    ESP_RETURN_ON_ERROR(candis_ov5640_get_controls(&before, &frame_lines), TAG, "read OV5640 controls");
-    const candis_ov5640_controls_t manual = {
-        .exposure_lines = frame_lines / 4,
-        .gain_q4 = 32,
-        .red_gain_q10 = 1024,
-        .green_gain_q10 = 1024,
-        .blue_gain_q10 = 1024,
-    };
-    ESP_LOGI(TAG, "Initial controls AEC=%d AGC=%d AWB=%d frame_lines=%u",
-             before.auto_exposure, before.auto_gain, before.auto_white_balance, (unsigned)frame_lines);
-    ESP_RETURN_ON_ERROR(candis_ov5640_set_controls(&manual), TAG, "apply OV5640 controls");
-    ESP_RETURN_ON_ERROR(settle_control_group(), TAG, "settle exposure and white balance");
-    candis_ov5640_controls_t actual;
-    ESP_RETURN_ON_ERROR(candis_ov5640_get_controls(&actual, NULL), TAG, "read back OV5640 controls");
-    ESP_RETURN_ON_FALSE(!actual.auto_exposure && !actual.auto_gain && !actual.auto_white_balance &&
-                        actual.exposure_lines == manual.exposure_lines && actual.gain_q4 == manual.gain_q4 &&
-                        actual.red_gain_q10 == manual.red_gain_q10 && actual.green_gain_q10 == manual.green_gain_q10 &&
-                        actual.blue_gain_q10 == manual.blue_gain_q10, ESP_ERR_INVALID_RESPONSE, TAG,
-                        "manual controls did not read back");
-    ESP_LOGI(TAG, "Manual controls readback exposure_lines=%u gain_q4=%u WB=%u/%u/%u",
-             (unsigned)actual.exposure_lines, (unsigned)actual.gain_q4, (unsigned)actual.red_gain_q10,
-             (unsigned)actual.green_gain_q10, (unsigned)actual.blue_gain_q10);
-    const candis_ov5640_isp_t isp = {
-        .luma_enabled = true, .saturation_enabled = true, .manual_saturation = true,
-        .brightness = 16, .contrast = 0x20, .saturation_u = 0x40, .saturation_v = 0x40,
-    };
-    ESP_RETURN_ON_ERROR(candis_ov5640_set_isp(&isp), TAG, "apply ISP settings");
-    ESP_RETURN_ON_ERROR(settle_control_group(), TAG, "settle ISP settings");
-    candis_ov5640_isp_t applied;
-    ESP_RETURN_ON_ERROR(candis_ov5640_get_isp(&applied), TAG, "read back ISP settings");
-    ESP_RETURN_ON_FALSE(applied.luma_enabled && applied.saturation_enabled && applied.manual_saturation &&
-                        applied.brightness == isp.brightness && applied.contrast == isp.contrast &&
-                        applied.saturation_u == isp.saturation_u && applied.saturation_v == isp.saturation_v,
-                        ESP_ERR_INVALID_RESPONSE, TAG, "ISP settings did not read back");
-    ESP_LOGI(TAG, "ISP readback brightness=%d contrast=0x%02x U/V=0x%02x/0x%02x",
-             applied.brightness, applied.contrast, applied.saturation_u, applied.saturation_v);
-    return ESP_OK;
-}
-#endif
-
-static esp_err_t run_preview(uint16_t *pixels)
+static esp_err_t run_camera(uint16_t **preview_buffer)
 {
     struct v4l2_pix_format format;
     candis_camera_stream_config_t config = {0};
@@ -232,20 +188,32 @@ static esp_err_t run_preview(uint16_t *pixels)
     config.pixel_format = V4L2_PIX_FMT_RGB565X;
 #endif
     ESP_RETURN_ON_ERROR(candis_camera_stream_start(&config, &format), TAG, "start preview stream");
-    size_t frame_bytes;
-    ESP_RETURN_ON_ERROR(check_preview_format(&format, &frame_bytes), TAG, "configure preview");
-#ifdef CONFIG_CANDIS_CAMERA_YUYV_RGB565
-    /* ESP Video documents big-endian RGB565X from the hardware converter. */
-    const bool swap = true;
-#else
-    /* The fixture's direct OV5640 RGB565X profile has been observed low-byte first. */
-    const bool swap = format.pixelformat == V4L2_PIX_FMT_RGB565;
-#endif
 #ifdef CONFIG_CANDIS_CAMERA_TEST_PATTERN
     ESP_RETURN_ON_ERROR(candis_camera_set_test_pattern(true), TAG, "enable sensor pattern");
 #endif
-#ifdef CONFIG_CANDIS_CAMERA_MANUAL_CONTROLS
-    ESP_RETURN_ON_ERROR(apply_manual_controls(), TAG, "verify sensor controls before capture");
+    if (format.pixelformat == V4L2_PIX_FMT_SBGGR8 || format.pixelformat == V4L2_PIX_FMT_SBGGR10 ||
+        format.pixelformat == V4L2_PIX_FMT_JPEG) {
+        return capture_payload(&format);
+    }
+    size_t frame_bytes;
+    ESP_RETURN_ON_ERROR(check_preview_format(&format, &frame_bytes), TAG, "configure preview");
+    uint16_t *pixels = heap_caps_malloc(BSP_LCD_H_RES * BSP_LCD_V_RES * sizeof(*pixels),
+                                       MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    ESP_RETURN_ON_FALSE(pixels, ESP_ERR_NO_MEM, TAG, "allocate preview buffer");
+    *preview_buffer = pixels;
+    candis_display_config_t display = CANDIS_DISPLAY_CONFIG_DEFAULT();
+#ifdef CONFIG_CANDIS_CAMERA_MANAGE_PANEL_POWER
+    display.manage_panel_power = true;
+#endif
+#ifdef CONFIG_CANDIS_CAMERA_QSPI_50MHZ
+    display.bench_qspi_80mhz = false;
+#endif
+    ESP_RETURN_ON_ERROR(candis_display_start_raw(&display), TAG, "start preview display");
+#if defined(CONFIG_CANDIS_CAMERA_FIXTURE) && !defined(CONFIG_CANDIS_CAMERA_YUYV_RGB565)
+    /* Preserve the byte order observed with the validation fixture. */
+    const bool swap = format.pixelformat == V4L2_PIX_FMT_RGB565;
+#else
+    const bool swap = format.pixelformat == V4L2_PIX_FMT_RGB565X;
 #endif
     bool still = false;
 #ifdef CONFIG_CANDIS_CAMERA_STILL
@@ -299,34 +267,28 @@ static esp_err_t run_preview(uint16_t *pixels)
 void app_main(void)
 {
     ESP_ERROR_CHECK_WITHOUT_ABORT(candis_example_usb_start(CANDIS_EXAMPLE_USB_CONSOLE, true));
-#ifndef CONFIG_CANDIS_CAMERA_FIXTURE
-    ESP_LOGI(TAG, "Use sdkconfig.fixture with the Candis validation fixture to start the camera");
+#if defined(CONFIG_CANDIS_CAMERA_ENABLE_ALL_DVP_SENSORS)
+    ESP_LOGI(TAG, "Select an individual sensor profile to run capture");
+    return;
+#elif !defined(CONFIG_CANDIS_CAMERA_FIXTURE) && !defined(CONFIG_CANDIS_CAMERA_DOCK_V12)
+    ESP_LOGI(TAG, "Select a fixture or Dock v1.2 camera wiring profile to start capture");
     return;
 #endif
     if (!candis_example_usb_begin_interruptible_operation()) {
         return;
     }
-    uint16_t *pixels = heap_caps_malloc(BSP_LCD_H_RES * BSP_LCD_V_RES * sizeof(*pixels),
-                                        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!pixels) {
-        ESP_LOGE(TAG, "allocate preview buffer");
-        candis_example_usb_end_operation();
-        return;
-    }
-    candis_display_config_t config = CANDIS_DISPLAY_CONFIG_DEFAULT();
-#ifdef CONFIG_CANDIS_CAMERA_MANAGE_PANEL_POWER
-    config.manage_panel_power = true;
+    uint16_t *pixels = NULL;
+    esp_err_t err;
+#ifdef CONFIG_CANDIS_CAMERA_FIXTURE
+    const candis_camera_config_t camera = camera_fixture_config();
+    err = candis_camera_init(&camera);
+#elif defined(CONFIG_CANDIS_CAMERA_DOCK_V12)
+    err = camera_dock_v12_init();
+#else
+    err = ESP_ERR_NOT_SUPPORTED;
 #endif
-#ifdef CONFIG_CANDIS_CAMERA_QSPI_50MHZ
-    config.bench_qspi_80mhz = false;
-#endif
-    esp_err_t err = candis_display_start_raw(&config);
     if (err == ESP_OK) {
-        const candis_camera_config_t camera = camera_fixture_config();
-        err = candis_camera_init(&camera);
-        if (err == ESP_OK) {
-            err = run_preview(pixels);
-        }
+        err = run_camera(&pixels);
     }
     esp_err_t camera_stop;
     esp_err_t display_stop;

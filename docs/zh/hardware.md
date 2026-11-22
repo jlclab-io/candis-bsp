@@ -32,6 +32,7 @@
 | TF 卡 | 四位 SDMMC，D0–D3 GPIO20–23，CLK GPIO24，CMD GPIO25。Dock 的卡检测为 GPIO39 |
 | 运动传感 | BMI270，主 I²C 地址 `0x68`，由 DC1SW 供电。INT1 接 GPIO38，BSP 使用轮询 |
 | M1 马达 | GPIO5 驱动高有效低边开关，BLDO2 供电。BSP 脉冲使用 2700 mV，需要确认马达装配和 USB 输入 |
-| OV5640 摄像头 | GPIO39/40 用于控制，GPIO46–57 用于 DVP 和 XCLK。按实物选择[摄像头接线配置](../../components/candis-camera/README.md#custom-wiring) |
+| OV5640 摄像头 | 测试板用 GPIO39 复位，GPIO40 可选控制 PWDN，GPIO46–57 用于 DVP 和 XCLK。按实物在[应用中配置接线和时序](../../components/candis-camera/README.md#application-wiring) |
+| Dock 摄像头接口 | GPIO46–57 提供 8 位 DVP，扩展 I²C GPIO58/59 提供 SCCB，并引出由 PMU 控制的 BLDO1、DC1SW、ALDO3、ALDO4 电源。见 [U7 接口引脚表](expansion.md#dock-20pin) |
 
 见[扩展硬件](expansion.md)获取 BTB 和 Dock 连接器引脚定义。

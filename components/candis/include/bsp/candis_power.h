@@ -75,7 +75,10 @@ typedef struct candis_expansion_ldo_lease *candis_expansion_ldo_handle_t;
  *
  * An already enabled rail is accepted only at the requested setting and stays
  * enabled on release. A non-NULL output on error retains a partial lease and
- * must be passed to candis_expansion_ldo_release() to retry cleanup.
+ * must be passed to candis_expansion_ldo_release() to retry cleanup. Initialize
+ * the output handle to NULL before its first acquisition. An active handle is
+ * preserved and rejected with ESP_ERR_INVALID_STATE. A released handle may be
+ * reused.
  */
 esp_err_t candis_expansion_ldo_acquire(candis_expansion_ldo_t rail, uint16_t voltage_mv, unsigned settle_ms,
                                       candis_expansion_ldo_handle_t *handle);

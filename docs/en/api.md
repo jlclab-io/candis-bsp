@@ -91,7 +91,7 @@ Use `candis_rtc_arm_update_irq()` and `candis_rtc_disarm_update_irq()` to bracke
 
 The standard mount verifies the Dock descriptor before using GPIO39. Power DC1SW, release UART0 on GPIO58/59 and keep U6 high impedance on GPIO39. After checking the expansion load, an application can use `bsp_feature_enable(BSP_FEATURE_SD, true)` to establish DC1SW. The mount path defaults to `/sdcard` and is configurable via `CONFIG_BSP_SD_MOUNT_POINT`.
 
-Select the profile for the actual card-detect wiring. Use `candis_storage_mount_with_config()` with `read_only = true` for browsing. Mounting leaves automatic formatting disabled. The storage owner polls `candis_storage_check_card()` and handles I/O failures. Once removal is observed, the mount reports `ESP_ERR_NOT_FOUND` through reinsertion until the application closes files and unmounts. Independent card detection uses `candis_storage_detect_read()` with application-side debounce.
+Select the profile for the actual card-detect wiring. Use `candis_storage_mount_with_config()` with `read_only = true` for browsing on ESP-IDF 6.2 or later. ESP-IDF 6.1 returns `ESP_ERR_NOT_SUPPORTED` for that request. Mounting leaves automatic formatting disabled. The storage owner polls `candis_storage_check_card()` and handles I/O failures. Once removal is observed, the mount reports `ESP_ERR_NOT_FOUND` through reinsertion until the application closes files and unmounts. Independent card detection uses `candis_storage_detect_read()` with application-side debounce.
 
 Enable `CONFIG_CANDIS_IMU` to sample acceleration and angular velocity. Use `candis_imu_get_state()` to check the hardware or active session. Use `candis_imu_start_with_config()` to set the rate and ranges, or `candis_imu_suspend()/resume()` to switch advanced power saving while retaining DC1SW. The first sample can return `ESP_ERR_NOT_FINISHED`. The 24-bit counter uses 39.0625 µs ticks. Use `candis_imu_read_temperature()` for die temperature.
 
@@ -110,4 +110,4 @@ The Candis PCM API supports 48 kHz signed stereo with one RX task and one TX tas
 ## Expansion and camera
 
 - Release UART0 and confirm DC1SW before calling `candis_baseboard_probe()`. Use the returned identity with the [Dock](../../components/candis-dock/README.md) API. See [current BSP support](expansion.md#bsp-support) for descriptor compatibility.
-- The [camera API](../../components/candis-camera/README.md) accepts board-specific pins, SCCB, clock and power callbacks. Choose the OV5640 mode at build time. Copy a still frame into application memory, or acquire and release DMA frames for streaming.
+- The [camera API](../../components/candis-camera/README.md) takes application-defined pins, SCCB and XCLK settings, and resource callbacks. Select an Espressif DVP sensor and mode at build time. Copy a still frame into application memory or borrow and release DMA frames for streaming.

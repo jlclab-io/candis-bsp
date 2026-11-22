@@ -10,7 +10,7 @@ static const gpio_num_t USER_LED = GPIO_NUM_37;
 
 void app_main(void)
 {
-    ESP_ERROR_CHECK(candis_example_usb_start(CANDIS_EXAMPLE_USB_CONSOLE, true));
+    ESP_ERROR_CHECK_WITHOUT_ABORT(candis_example_usb_start(CANDIS_EXAMPLE_USB_CONSOLE, true));
 
     // The LED and its pull-up allow open-drain operation on this shared pin.
     ESP_ERROR_CHECK(gpio_set_level(USER_LED, 1));

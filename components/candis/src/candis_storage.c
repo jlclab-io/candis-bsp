@@ -164,6 +164,11 @@ esp_err_t candis_storage_detect_stop(void)
     }
     const esp_err_t err = s_detect.power.bus && (s_storage.path || s_storage.power.bus) ?
                           ESP_ERR_INVALID_STATE : release_detect();
+    if (err == ESP_OK && s_storage.restore_detect && !s_storage.path &&
+        !s_storage.card && !s_storage.power.bus) {
+        s_storage.restore_detect = false;
+        s_storage.bsp_mount = false;
+    }
     candis_control_leave();
     return err;
 }
@@ -236,8 +241,9 @@ static esp_err_t release_storage(void)
     s_storage.path = NULL;
     if (s_storage.restore_detect) {
         const esp_err_t err = configure_detect();
-        s_storage.restore_detect = false;
-        if (err != ESP_OK) {
+        if (err == ESP_OK) {
+            s_storage.restore_detect = false;
+        } else {
             ESP_LOGE(TAG, "restore card detect: %s", esp_err_to_name(err));
             if (unmount == ESP_OK) {
                 unmount = err;
@@ -252,7 +258,9 @@ static esp_err_t release_storage(void)
     if (power != ESP_OK) {
         ESP_LOGE(TAG, "release DC1SW: %s", esp_err_to_name(power));
     } else {
-        s_storage.bsp_mount = false;
+        if (!s_storage.restore_detect) {
+            s_storage.bsp_mount = false;
+        }
         s_storage.removed = false;
     }
     return unmount == ESP_OK ? power : unmount;
@@ -356,13 +364,17 @@ static esp_err_t mount_with_config(const char *base_path, candis_storage_profile
 esp_err_t candis_storage_mount_with_config(const char *base_path, candis_storage_profile_t profile,
                                            const candis_storage_mount_config_t *config, sdmmc_card_t **card)
 {
-    if (!config) {
+    if (!config || !base_path || base_path[0] != '/' || base_path[1] == '\0' ||
+        !card || !valid_profile(profile)) {
         return ESP_ERR_INVALID_ARG;
     }
+    *card = NULL;
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 2, 0)
     const esp_vfs_fat_sdmmc_mount_config_t mount = {.max_files = 4, .read_only = config->read_only};
 #else
-    /* IDF 6.1 lacks the read_only mount option; the request is ignored. */
+    if (config->read_only) {
+        return ESP_ERR_NOT_SUPPORTED;
+    }
     const esp_vfs_fat_sdmmc_mount_config_t mount = {.max_files = 4};
 #endif
     const bsp_sdcard_cfg_t options = {.mount = &mount};

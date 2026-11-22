@@ -2,7 +2,7 @@
 
 [使用文档](README.md) · [English](../en/usb.md)
 
-Candis 板载 USB-C 使用原生 USB OTG。示例启动后通常会提供 USB CDC 串口控制台。进入 ROM 下载模式或重启应用后，电脑上的串口名称可能发生变化。
+Candis 板载 USB-C 使用原生 USB OTG。ESP-IDF 6.2 及以上版本会将示例控制台切换到 USB CDC。ESP-IDF 6.1 下控制台切换返回 `ESP_ERR_NOT_SUPPORTED`，示例继续使用启动控制台。进入 ROM 下载模式或重启应用后，电脑上的串口名称可能发生变化。
 
 ## 首次烧录
 
