@@ -12,5 +12,5 @@
 | [组件支持](component-coverage.md) | 可用功能及硬件使用范围 |
 | [TG28-ESP 驱动](tg28-esp-coverage.md) | PMU 接口及使用条件 |
 | [扩展硬件](expansion.md) | BTB 与 Dock 针脚、识别及资源管理 |
-| [EEPROM V1](eeprom-v1.md) | 二进制描述符、产品编号和兼容规则 |
-| [EEPROM 烧录](eeprom-programming.md) | AT24C02 事务、生产流程及测试向量 |
+| [Dock EEPROM](eeprom-v1.md) | Dock 描述符字段、身份与校验规则 |
+| [EEPROM 维护](eeprom-programming.md) | AT24C02 读取、写入规则与镜像放行 |

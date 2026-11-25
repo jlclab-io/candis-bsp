@@ -8,7 +8,7 @@ Add the `candis` component to the application manifest. See the [repository quic
 
 Include [`bsp/esp-bsp.h`](include/bsp/esp-bsp.h) and use `BSP_CAPS_*` for build capabilities. Supply ALDO1 and enable PSRAM before calling `bsp_display_start()`, then enable brightness. Protect LVGL calls with `bsp_display_lock()` and `bsp_display_unlock()`. Set `CONFIG_CANDIS_NO_GRAPHIC_LIB=y` for native panel and touch without LVGL.
 
-Use `bsp_i2c_get_handle()` for the fixed core-board I²C bus. For storage, `candis_storage_configure()` supplies the application's SDMMC pins, card-detect polarity, and optional DC1SW policy before `bsp_sdcard_mount()` or `candis_storage_mount()`. Motion uses a caller-owned bus, address, and ranges in `candis_imu_config_t`. The motor API likewise takes caller-selected GPIO, LEDC resources, and optional supply. `candis-dock` owns its known Dock wiring, while other baseboards and application-specific assemblies keep their assignments in the application.
+Use `bsp_i2c_get_handle()` for the fixed core-board I²C bus. For storage, `candis_storage_configure()` supplies the application's SDMMC pins, card-detect polarity, and optional DC1SW policy before `bsp_sdcard_mount()` or `candis_storage_mount()`. Motion uses a caller-owned bus, address, and ranges in `candis_imu_config_t`. The motor API likewise takes caller-selected GPIO, LEDC resources, and optional supply. `candis-dock` owns its known Dock wiring. Application-specific peripherals and U6/U7 modules keep their assignments in the application.
 
 The component also provides read-only PMU status and the RX8130CE calendar. Enable the corresponding Kconfig options for ES8389 audio, BMI270 motion, or native USB Device and Host. Confirm the attached hardware and supplies before first use.
 

@@ -1,6 +1,6 @@
 # Candis motor example
 
-Use a compatible motor driver assembly. The default configuration demonstrates GPIO5 with BLDO2 supplying the driver rail. Verify the pinout, supply range, driver polarity, and motor limits for the actual assembly before enabling output. The AMOLED UI provides start/stop, live amplitude control from 1–100, and a 1–20 kHz PWM carrier control. The console exposes the same controls for scripted checks. Build the example and follow [USB and flashing](../../docs/en/usb.md).
+Use a compatible motor driver assembly. The example uses GPIO5 and BLDO2 as a demonstration configuration. These values are not a Dock hardware definition. Verify the pinout, supply range, driver polarity and motor limits for the actual assembly before enabling output. The AMOLED UI provides start/stop, live amplitude control from 1–100, and a 1–20 kHz PWM carrier control. The console exposes the same controls for scripted checks. Build the example and follow [USB and flashing](../../docs/en/usb.md).
 
 ```sh
 idf.py --preview -C examples/motor build

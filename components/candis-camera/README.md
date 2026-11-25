@@ -12,7 +12,7 @@ The profiles cover BF20A6, BF3031, BF3045, BF3925, BF3A03, GC0308, GC032A, GC214
 
 Fill `candis_camera_config_t` with the application's DVP pins, SCCB settings, and XCLK configuration. Use a dedicated HP I²C port or pass a borrowed bus with both SCCB pin fields set to `GPIO_NUM_NC`. Set `xclk` to `GPIO_NUM_NC` when the application or module supplies its own clock. Set `validate_sensor` and `expected_sensor` to verify the detected chip before capture. For a mode other than the profile reference mode, use the XCLK specified in the corresponding Espressif sensor format table.
 
-The application owns supply voltages, power sequencing, RESET and PWDN. The optional `acquire` callback supplies board resources before XCLK starts. The optional `prepare` callback runs after XCLK starts and before detection. `release` runs after video and XCLK stop. Keep the callback context and borrowed bus valid until cleanup succeeds. Make `release` safe to retry after partial acquisition or cleanup. See the [example wiring and resource callbacks](https://github.com/jlclab-io/candis-bsp/blob/main/examples/camera/main/camera_fixture.c).
+The application owns supply voltages, power sequencing, RESET and PWDN. The optional `acquire` callback supplies board resources before XCLK starts. The optional `prepare` callback runs after XCLK starts and before detection. `release` runs after video and XCLK stop. Keep the callback context and borrowed bus valid until cleanup succeeds. Make `release` safe to retry after partial acquisition or cleanup. The [camera example](https://github.com/jlclab-io/candis-bsp/tree/main/examples/camera) shows an application-side resource adapter.
 
 ## Capture and controls
 
@@ -33,18 +33,15 @@ Use the returned format for stride, dimensions, and pixel encoding. Query contro
 
 ## Camera example
 
-Each `sdkconfig.<model>` fragment in the [camera example](https://github.com/jlclab-io/candis-bsp/tree/main/examples/camera) selects one driver and reference mode for [Dock v1.2 U7](https://github.com/jlclab-io/candis-bsp/blob/main/docs/en/expansion.md#dock-20-pin-headers). Match the module pinout, I/O levels, XCLK, supply rails, and RESET/PWDN requirements before connecting it. The default Dock build leaves supply management to the application or module. Release UART0 on the expansion I²C pins before using SCCB. U7 has no dedicated RESET or PWDN line.
+Each `sdkconfig.<model>` fragment in the [camera example](https://github.com/jlclab-io/candis-bsp/tree/main/examples/camera) selects one driver and reference mode for [Dock v1.2 U7](https://github.com/jlclab-io/candis-bsp/blob/main/docs/en/expansion.md#dock-20-pin-headers). Match the module pinout, I/O levels, XCLK, supply rails and RESET/PWDN requirements before connecting it. The default Dock configuration leaves supply management to the application or module. Release UART0 on the expansion I²C pins before using SCCB. U7 has no dedicated RESET or PWDN line.
 
 RGB565, YUV422, and grayscale modes can preview on the 480 × 480 AMOLED. RAW and JPEG modes capture a payload and log its size. Use a separate build directory and SDKCONFIG file for each variant.
 
 | Fragment | Use |
 | --- | --- |
-| `sdkconfig.dvp_all` | Compile all 17 official DVP drivers for build verification |
-| `sdkconfig.fixture` | Select the reference OV5640 assembly's wiring and supplies |
+| `sdkconfig.ov5640` | Select OV5640 RGB565 preview on Dock v1.2 U7 |
 | `sdkconfig.still` | Display a single captured frame |
-| `sdkconfig.jpeg` | Save a still to the reference assembly's FAT-formatted TF card |
-| `sdkconfig.uyvy` / `sdkconfig.yuyv` | Select the reference assembly's UYVY software conversion or YUYV DVP conversion path |
 
-For the reference assembly, disable `CONFIG_CANDIS_CAMERA_FIXTURE_PWDN_GPIO` for a module that holds PWDN low in hardware.
+Other `sdkconfig.<model>` fragments select the corresponding sensor driver and mode. Assembly-specific supplies and control pins belong in the application resource callbacks.
 
 [Apache-2.0](LICENSE)

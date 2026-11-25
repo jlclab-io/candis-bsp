@@ -14,14 +14,14 @@ From the root of the checkout, run `idf.py --preview -C examples/<name> build` i
 | [Music player](../../examples/music_player/README.md) | Play the bundled score and select speaker channels. Requires display and audio power. |
 | [Camera](../../examples/camera) | Capture with a DVP sensor selected in the [camera guide](../../components/candis-camera/README.md). Preview RGB565, YUV422 and grayscale on the AMOLED. |
 | [TF card](../../examples/tf_card) | Display hot-plug status and the root directory on AMOLED. With `sdkconfig.write_test`, the touchscreen button or console `W` command exclusively creates a 4 KiB temporary file, writes, syncs, compares the read-back data, and deletes the file. Requires DC1SW and the configured card-detect pin. |
-| [Expansion](../../examples/expansion) | Detect the Dock, browse its TF card, and optionally probe module addresses. |
+| [Expansion](../../examples/expansion) | Detect the Dock, browse its TF card, and check whether the reserved module EEPROM addresses acknowledge. |
 | [Dock](../../examples/dock/README.md) | Identify the Dock and exercise TF, BMI270, display and audio. |
-| [ADC](../../examples/adc) | Sample two analog inputs. Defaults to the Dock LEFT header. |
-| [Motion](../../examples/motion) | Sample BMI270 motion and temperature with the expansion rail already powered. |
+| [ADC](../../examples/adc) | Demonstrate an application-owned two-channel ADC configuration. The example defaults do not define baseboard pins. |
+| [Motion](../../examples/motion) | Read BMI270 motion and temperature with an application-supplied bus, address and sampling configuration. |
 | [RTC](../../examples/rtc) | Read or set UTC and try RTC update wake. See [RTC console](#rtc-console). |
 | [Power](../../examples/power/README.md) | Show power and charge telemetry on AMOLED. Validate the charger before applying the default 200 mA setpoint. |
 | [TG28 monitor](../../examples/tg28/README.md) | Read TG28-ESP status over I²C from a standalone application. |
-| [Motor](../../examples/motor/README.md) | Run a short PWM pulse on the fitted M1 motor. |
+| [Motor](../../examples/motor/README.md) | Demonstrate the application-supplied GPIO, LEDC and supply configuration. The example defaults do not define a baseboard motor interface. |
 
 ## Board and system
 
@@ -35,16 +35,15 @@ From the root of the checkout, run `idf.py --preview -C examples/<name> build` i
 | [Sleep](../../examples/sleep) | Enter timer-woken light sleep or deep sleep and reconnect the console afterwards. |
 | [Flash information](../../examples/flash) | Read flash identification, capacity, and the running image hash. |
 
-## Board profiles
+## Defined board profiles
 
 | Example | Hardware | GPIO notes |
 | --- | --- | --- |
 | TF card | Candis Dock or an application-defined TF assembly | The Dock uses GPIO39 for card detect. Adjust the example for application-specific wiring |
-| ADC | Candis Dock (LEFT header) | GPIO42 and GPIO43 at U6.20 and U6.18 |
 | Camera | Dock v1.2 U7 or an application-defined DVP assembly | U7 leaves RESET and PWDN to the module or adapter. Match the assembly supplies and release UART0 for SCCB. See the [camera guide](../../components/candis-camera/README.md#application-wiring) |
-| LED and motor | Core board and Dock | LED on GPIO37, motor on GPIO5 |
+| Core LED | Candis core board | GPIO37, also routed to Dock U6.8 |
 
-For Dock TF storage, keep LEFT U6 empty or leave GPIO39 high impedance. Use a FAT-formatted card. Leave GPIO37 available at U6.8 to use the core LED. Connect external ADC inputs with a common ground and keep them within the configured 0 dB attenuation range.
+For Dock TF storage, keep LEFT U6 empty or leave GPIO39 high impedance. Use a FAT-formatted card. Leave GPIO37 available at U6.8 to use the core LED. The default GPIOs in the ADC and motor examples demonstrate application configuration and are not Dock board definitions.
 
 The TF example uses a read-only VFS mount for browsing on ESP-IDF 6.2. On ESP-IDF 6.1, the example restricts browsing to directory reads.
 

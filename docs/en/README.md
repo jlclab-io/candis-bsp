@@ -12,5 +12,5 @@
 | [Component support](component-coverage.md) | Available features and hardware coverage |
 | [TG28-ESP driver](tg28-esp-coverage.md) | PMU interfaces and operating requirements |
 | [Expansion hardware](expansion.md) | BTB and Dock pinouts, discovery, and resource management |
-| [EEPROM V1](eeprom-v1.md) | Binary descriptor, product IDs, and compatibility |
-| [EEPROM programming](eeprom-programming.md) | AT24C02 transactions, production workflow, and test vectors |
+| [Dock EEPROM](eeprom-v1.md) | Dock descriptor fields, identity, and validation |
+| [EEPROM maintenance](eeprom-programming.md) | AT24C02 access, write rules, and image approval |

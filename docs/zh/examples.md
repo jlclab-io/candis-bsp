@@ -14,14 +14,14 @@
 | [音乐播放器](../../examples/music_player/README.md) | 播放内置曲目并选择扬声器声道，需要显示和音频供电。 |
 | [摄像头](../../examples/camera) | 按[摄像头指南](../../components/candis-camera/README.md)选择 DVP 型号取帧。AMOLED 可预览 RGB565、YUV422 和灰度画面。 |
 | [TF 卡](../../examples/tf_card) | 在 AMOLED 实时显示热插拔状态和根目录。启用 `sdkconfig.write_test` 后，屏幕按钮或控制台 `W` 命令会独占创建 4 KiB 临时文件，写入、同步、回读比较后删除。需为 DC1SW 供电，并按实际板型配置卡检测脚。 |
-| [扩展板](../../examples/expansion) | 识别 Dock 后浏览 TF 卡，可选探测模块地址。 |
+| [扩展板](../../examples/expansion) | 识别 Dock 后浏览 TF 卡，并可检查预留模块 EEPROM 地址是否应答。 |
 | [Dock](../../examples/dock/README.md) | 识别 Dock 并测试 TF 卡、BMI270、显示和扬声器。 |
-| [ADC](../../examples/adc) | 采集两路模拟信号，默认使用 Dock LEFT 扩展座。 |
-| [运动传感](../../examples/motion) | 在扩展域已上电时读取 BMI270 运动数据和温度。 |
+| [ADC](../../examples/adc) | 演示应用自有的两路 ADC 配置。示例默认值不定义底板引脚。 |
+| [运动传感](../../examples/motion) | 使用应用提供的总线、BMI270 地址和采样配置读取运动数据与温度。 |
 | [RTC](../../examples/rtc) | 读取或设置 UTC，并体验 RTC 更新唤醒。见 [RTC 控制台](#rtc-控制台)。 |
 | [电源](../../examples/power/README.md) | 在 AMOLED 上显示电源与充电遥测，充电条件检查通过后设置默认 200 mA 档位。 |
 | [TG28 监测](../../examples/tg28/README.md) | 独立应用通过 I²C 读取 TG28-ESP 状态。 |
-| [马达](../../examples/motor/README.md) | 为 Candis Dock 已安装的 M1 马达输出短时 PWM 脉冲。 |
+| [马达](../../examples/motor/README.md) | 演示应用提供的 GPIO、LEDC 和电源配置。示例默认值不定义底板马达接口。 |
 
 ## 板级与系统
 
@@ -35,16 +35,15 @@
 | [睡眠](../../examples/sleep) | 进入由定时器唤醒的浅睡眠或深睡眠，唤醒后重新连接控制台。 |
 | [Flash 信息](../../examples/flash) | 读取 Flash 标识、容量和运行镜像哈希。 |
 
-## 板型配置
+## 已定义板型配置
 
 | 示例 | 硬件 | GPIO 说明 |
 | --- | --- | --- |
 | TF 卡 | Candis Dock | Dock 卡检测使用 GPIO39 |
-| ADC | Candis Dock（LEFT 扩展座） | GPIO42 和 GPIO43 分别在 U6.20 和 U6.18 |
 | 摄像头 | Dock v1.2 U7 或应用自有 DVP 装配 | 使用 U7 时由模组或转接板处理 RESET 和 PWDN。匹配装配供电并释放 UART0 供 SCCB 使用。见[摄像头接线配置](../../components/candis-camera/README.md#application-wiring) |
-| LED 和马达 | 核心板和 Dock | LED 用 GPIO37，M1 马达用 GPIO5 |
+| 核心板 LED | Candis 核心板 | GPIO37，同时引至 Dock U6.8 |
 
-使用 Dock TF 卡时，保持 LEFT U6 空置，或使其 GPIO39 线路保持高阻。使用 FAT 格式卡。使用核心板 LED 前，确保 U6.8 上的 GPIO37 可用。外接 ADC 信号须与板卡共地，并符合 0 dB 衰减档位的输入范围。
+使用 Dock TF 卡时，保持 LEFT U6 空置，或使其 GPIO39 线路保持高阻。使用 FAT 格式卡。使用核心板 LED 前，确保 U6.8 上的 GPIO37 可用。ADC 和马达示例中的默认 GPIO 仅用于演示应用配置接口，不属于 Dock 板级定义。
 
 TF 示例在 ESP-IDF 6.2 使用 VFS 只读浏览挂载，在 ESP-IDF 6.1 由示例将浏览操作限制为目录读取。
 

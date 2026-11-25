@@ -20,8 +20,8 @@
 | [docs/en/examples.md](en/examples.md) | 可用示例和用法 |
 | [docs/en/component-coverage.md](en/component-coverage.md) | 功能支持矩阵 |
 | [docs/en/expansion.md](en/expansion.md) | 扩展硬件和 Dock 支持 |
-| [docs/en/eeprom-v1.md](en/eeprom-v1.md) | EEPROM 格式规范 |
-| [docs/en/eeprom-programming.md](en/eeprom-programming.md) | EEPROM 烧录步骤 |
+| [docs/en/eeprom-v1.md](en/eeprom-v1.md) | Candis Dock EEPROM 描述符 |
+| [docs/en/eeprom-programming.md](en/eeprom-programming.md) | EEPROM 读取与镜像维护 |
 | [docs/en/tg28-esp-coverage.md](en/tg28-esp-coverage.md) | 电源管理驱动参考 |
 
 ### 中文 (Chinese)
@@ -35,8 +35,8 @@
 | [docs/zh/examples.md](zh/examples.md) | 可用示例和用法 |
 | [docs/zh/component-coverage.md](zh/component-coverage.md) | 功能支持矩阵 |
 | [docs/zh/expansion.md](zh/expansion.md) | 扩展硬件和 Dock 支持 |
-| [docs/zh/eeprom-v1.md](zh/eeprom-v1.md) | EEPROM 格式规范 |
-| [docs/zh/eeprom-programming.md](zh/eeprom-programming.md) | EEPROM 烧录步骤 |
+| [docs/zh/eeprom-v1.md](zh/eeprom-v1.md) | Candis Dock EEPROM 描述符 |
+| [docs/zh/eeprom-programming.md](zh/eeprom-programming.md) | EEPROM 读取与镜像维护 |
 | [docs/zh/tg28-esp-coverage.md](zh/tg28-esp-coverage.md) | 电源管理驱动参考 |
 
 ## 组件文档

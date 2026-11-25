@@ -67,7 +67,7 @@ Power off before fitting a baseboard. Connect one baseboard at a time across bot
 - [**Audio recorder**](examples/audio/README.md) and [**music player**](examples/music_player/README.md) demo stereo recording and playback.
 - [**Camera**](examples/camera) selects a DVP sensor profile for capture or AMOLED preview.
 - [**Wi-Fi and BLE coexistence**](examples/bleprph_wifi_coex/README.md) combines access-point scanning, HTTP access, and a BLE GATT server.
-- [**Dock**](examples/dock/README.md) and [**expansion**](examples/expansion) exercise microSD and module discovery.
+- [**Dock**](examples/dock/README.md) and [**expansion**](examples/expansion) exercise microSD and probing of the reserved expansion EEPROM addresses.
 
 [Browse all examples →](docs/en/examples.md)
 
@@ -78,7 +78,7 @@ Power off before fitting a baseboard. Connect one baseboard at a time across bot
 - [`candis-camera`](components/candis-camera/README.md) provides configurable 8-bit DVP capture and controls for 17 Espressif sensor profiles.
 - [`candis-dock`](components/candis-dock/README.md) manages Dock identification, TF cards, and speaker routing.
 
-The BSP is in development preview. See [component support](docs/en/component-coverage.md) for hardware coverage.
+Hardware support and configuration boundaries are listed in [component support](docs/en/component-coverage.md).
 
 ## License
 

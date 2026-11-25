@@ -67,7 +67,7 @@ dependencies:
 - [**录音机**](examples/audio/README.md)和[**音乐播放器**](examples/music_player/README.md)演示双声道录音和播放。
 - [**摄像头**](examples/camera)按 DVP 型号配置采集或 AMOLED 预览，覆盖 17 种 Espressif 传感器配置。
 - [**Wi-Fi 与 BLE 共存**](examples/bleprph_wifi_coex/README.md)组合无线网络扫描、HTTP 访问和 BLE GATT 服务端。
-- [**Dock**](examples/dock/README.md)和[**扩展板**](examples/expansion)演示 TF 卡访问和模块探测。
+- [**Dock**](examples/dock/README.md)和[**扩展板**](examples/expansion)演示 TF 卡访问及预留扩展 EEPROM 地址探测。
 
 [查看全部示例 →](docs/zh/examples.md)
 
@@ -78,7 +78,7 @@ dependencies:
 - [`candis-camera`](components/candis-camera/README.md) 提供可配置的 8-bit DVP 采集，覆盖 17 种 Espressif 传感器配置。
 - [`candis-dock`](components/candis-dock/README.md) 提供 Dock 识别、TF 卡访问与扬声器声道选择。
 
-BSP 处于开发预览阶段。硬件支持范围见[组件支持](docs/zh/component-coverage.md)。
+硬件支持范围与配置边界见[组件支持](docs/zh/component-coverage.md)。
 
 ## 许可证
 

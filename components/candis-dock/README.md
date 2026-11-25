@@ -12,7 +12,7 @@ Support for Candis Dock revisions 1.1 and 1.2. The component identifies the base
 | CN3 speaker | Differential left output on rev. 1.1, right on rev. 1.2 |
 | CN4 battery | VBAT and GND. The fixed TS resistor provides no cell temperature measurement |
 
-Use both BTB connectors. Release UART0 before claiming GPIO58/59, and leave U6 empty or keep its GPIO39 high impedance when using TF. See the [connector pinout](https://github.com/jlclab-io/candis-bsp/blob/main/docs/en/expansion.md) for module wiring.
+Use both BTB connectors. Release UART0 before claiming GPIO58/59, and leave U6 empty or keep its GPIO39 high impedance when using TF. See the [connector pinout](https://github.com/jlclab-io/candis-bsp/blob/main/docs/en/expansion.md) for expansion-header wiring.
 
 ## Use in an application
 

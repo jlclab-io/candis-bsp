@@ -1,87 +1,56 @@
-# Candis EEPROM V1
+# Candis Dock EEPROM 描述符
 
 [使用文档](README.md) · [English](../en/eeprom-v1.md)
 
-Candis 底板和 Dock 子模块共用本描述符。EEPROM 提供产品身份、硬件修订、制造追溯信息和可选参数。BSP 与 MicroPixel Host 依据固件中审核过的配置选择驱动、电源和引脚。接线、识别顺序和资源规则见 [扩展识别与资源管理](expansion.md)，产线操作和二进制测试向量见 [EEPROM 读写与生产配置](eeprom-programming.md)。
-
-本页定义新镜像和接收规则。现有固件的兼容范围见 [BSP 支持](expansion.md#bsp-支持)。
+Candis Dock 在 U10 使用 AT24C02 保存整板身份。Dock v1.1 和 v1.2 共用 134 字节描述符，器件其余区域保留。Dock 地址为 `0x50`，扩展座 U6/U7 的模块 EEPROM 地址分别为 `0x51` 和 `0x52`。地址与电源接线见 [扩展硬件](expansion.md#位置与地址)。
 
 ## 线格式
 
-**Candis V1 采用 `CND` Magic、134 字节描述符和 256 字节器件容量。** 描述符从 EEPROM 偏移 `0x00` 开始，到 `0x85` 结束。表中的偏移是字节地址，多字节无符号整数均为小端。每个字段按偏移显式编解码。
+描述符从 EEPROM 偏移 `0x00` 开始，到 `0x85` 结束。多字节无符号整数均为小端。Magic 为 ASCII `ESP`。当前 BSP 只接受 Candis Dock 的固定身份元组。
 
-| Offset | Size（字节） | Type | 字段 | 含义和有效范围 |
+| 偏移 | 长度（字节） | 类型 | 字段 | 当前定义 |
 | ---: | ---: | --- | --- | --- |
-| `0x00` | 3 | byte[3] | Magic | ASCII `CND`，字节 `43 4E 44` |
-| `0x03` | 1 | u8 | Board Type | `0x31` 直连通用底板类，`0x32` Dock 子模块；其他值在 V1 保留 |
-| `0x04` | 2 | u16 | Board ID / Product ID | 同一字段，厂商内产品号 `0x0001`–`0xFFFE`，其中 `0x0000`、`0xFFFF` 无效 |
-| `0x06` | 2 | u16 | Hardware Revision | 高字节 major `1..254`，低字节 minor `0..254`，例如 `0x0102` 为硬件 v1.2。字节值 `0xFF` 保留 |
-| `0x08` | 2 | u16 | SW Compatibility | V1 固定 `0x0100`，即描述符兼容版本 1.0 |
-| `0x0A` | 2 | u16 | Vendor ID | Candis 为 `0xCA4E`。第三方和开发分配见下节 |
-| `0x0C` | 4 | u32 | Board Flags | V1 的 32 位均保留，写 `0`。功能由产品配置定义 |
-| `0x10` | 4 | u32 | Serial Number | 厂商在每个 Product ID 内分配 `1..0xFFFFFFFE`，跨批次和硬件修订保持唯一。`0` 表示未分配，发布镜像须分配；`0xFFFFFFFF` 无效 |
-| `0x14` | 32 | byte[32] | Board Name | 1–32 个 ASCII 可打印字节 `0x20..0x7E`。不足 32 字节时右侧补 `0x00`，满长时无终止符。仅用于显示和诊断 |
-| `0x34` | 2 | u16 | Identity CRC | 覆盖 `0x00..0x33`，含 Magic |
-| `0x36` | 4 | u32 | Manufacture Date | 将十进制 `YYYYMMDD` 作为整数写入，年份 2000–2099，月日须为有效公历日期。`0` 表示未知，发布镜像须填写 |
-| `0x3A` | 2 | u16 | Batch Number | 厂商按工厂、生产年份和产品分配 `1..0xFFFE`，跨年度由日期区分。`0` 表示未知，发布镜像须填写；`0xFFFF` 无效 |
-| `0x3C` | 2 | u16 | Factory ID | 厂商内工厂号 `1..0xFFFE`，`0` 表示未知，发布镜像须填写；`0xFFFF` 无效 |
+| `0x00` | 3 | byte[3] | Magic | ASCII `ESP`，字节 `45 53 50` |
+| `0x03` | 1 | u8 | Board Type | Dock 为 `0x31` |
+| `0x04` | 2 | u16 | Board ID / Product ID | Candis Dock 为 `0x0002` |
+| `0x06` | 2 | u16 | Hardware Revision | v1.1 为 `0x0101`，v1.2 为 `0x0102` |
+| `0x08` | 2 | u16 | SW Compatibility | `0x0100` |
+| `0x0A` | 2 | u16 | Vendor ID | Candis 为 `0xCA4E` |
+| `0x0C` | 4 | u32 | Board Flags | 当前只允许 bit 0，其他位为 `0` |
+| `0x10` | 4 | u32 | Serial Number | 产品内制造序列号 |
+| `0x14` | 32 | byte[32] | Board Name | 可打印 ASCII，右侧补 `0x00` |
+| `0x34` | 2 | u16 | Identity CRC | 覆盖 `0x00..0x33` |
+| `0x36` | 4 | u32 | Manufacture Date | 十进制 `YYYYMMDD` |
+| `0x3A` | 2 | u16 | Batch Number | 制造批次号 |
+| `0x3C` | 2 | u16 | Factory ID | 制造工厂号 |
 | `0x3E` | 2 | u16 | Manufacturing CRC | 覆盖 `0x36..0x3D` |
-| `0x40` | 2 | u16 | Parameter Version | V1 固定 `0x0001` |
-| `0x42` | 2 | u16 | Parameter Length | `0..64`，仅计有效 TLV 的字节数。默认 `0` |
-| `0x44` | 64 | byte[64] | Parameter Data | 前 Length 字节为 TLV，剩余字节全部为 `0x00` |
-| `0x84` | 2 | u16 | Parameter CRC | 覆盖 `0x40..0x83`，含版本、长度和补零区 |
-| `0x86` | 122 | byte[122] | Reserved EEPROM Area | 描述符外的保留区。新生成的 256 字节镜像填 `0xFF`，固件识别忽略此区。在役维护保留原内容 |
+| `0x40` | 2 | u16 | Parameter Version | 当前为 `0x0001` |
+| `0x42` | 2 | u16 | Parameter Length | `0..64` 字节 |
+| `0x44` | 64 | byte[64] | Parameter Data | 当前 BSP 不解释内容，只检查 Parameter Length 和该段 CRC |
+| `0x84` | 2 | u16 | Parameter CRC | 覆盖 `0x40..0x83` |
+| `0x86` | 122 | byte[122] | Reserved EEPROM Area | 不属于描述符，当前 BSP 忽略此区 |
 
-CRC 使用 **CRC-16/MODBUS**。多项式 `0x8005`，输入/输出反射，右移实现使用 `0xA001`，初值 `0xFFFF`，输出异或值 `0x0000`。三段各自从初值起算，分段的 CRC 字段均在覆盖区外。结果低字节先存。ASCII `123456789` 的校验值为 `0x4B37`，存储为 `37 4B`。
+CRC 使用 **CRC-16/MODBUS**。多项式为 `0x8005`，右移实现使用 `0xA001`，初值 `0xFFFF`，最终异或为 `0x0000`。三段分别从初值起算，CRC 字段本身不参与对应覆盖区。结果低字节先存。ASCII `123456789` 的校验值为 `0x4B37`，存储为 `37 4B`。
 
-## ID 与硬件修订
+## 当前支持的身份
 
-| Vendor ID | 分配 |
-| --- | --- |
-| `0xCA4E` | Candis 项目维护者分配，其中产品号由本规范及后续登记维护 |
-| `0x1000..0x7FFF` | Candis 项目维护者按厂商分配，一家厂商使用一个登记值 |
-| `0xFFFE` | 开发夹具临时使用。仅开发配置可以显式登记，发布配置拒绝 |
-| 其他 | 保留。上游原生 Mosaico 使用自己的命名空间 |
-
-第三方提交厂商、产品、硬件修订和装配变体，以及原理图、BOM、接入位置、地址、默认电平、引脚/总线需求和稳态及浪涌电流。Candis 维护者在审核时登记 Vendor ID。第三方在自己的 Vendor ID 下分配 Product ID，按型号登记 Board Type 及兼容修订。停产产品的 ID 保留，改名沿用原 ID。电气接口类别或产品身份改变时分配新产品号。在同一产品内，接线、电平、上电默认状态、器件型号或驱动兼容性改变时更新硬件修订，按确切修订验证固件配置。
-
-Candis 产品 ID `0x0001` 保留。
-
-| Vendor ID | Board Type | Product ID | 产品 | 本版登记 |
+| Vendor ID | Board Type | Product ID | 产品 | Hardware Revision |
 | --- | --- | --- | --- | --- |
-| `0xCA4E` | `0x31` | `0x0002` | `candis-dock` | v1.1 `0x0101` 和 v1.2 `0x0102`，直连。旧代码使用 `CANDIS_BASEBOARD_BB` 名称 |
-| `0xCA4E` | `0x31` | `0x0003` | `candis_bb` | 独立无子槽底板预留。示例 v1.0，具体板图、BOM 和驱动配置需登记 |
-| `0xCA4E` | `0x32` | `0x0101` | `candis_joystick` | 摇杆参考模块，示例 v1.0。待出图和验证 |
-| `0xCA4E` | `0x32` | `0x0102` | `candis_sensor` | I²C 传感器参考模块，示例 v1.0。待出图和验证 |
+| `0xCA4E` | `0x31` | `0x0002` | Candis Dock | `0x0101`、`0x0102` |
 
-`0x31` 表示底板的接口类别。Host 仅在白名单产品配置声明有子槽时枚举子模块。子模块的功能类别（如摇杆、传感器）和功能集由产品配置提供。`Board Type`、`Product ID` 和 `Board Name` 保持三个独立字段。注册记录包含 `(Vendor ID, Product ID) → Board Type`，读到类型与注册记录不一致时拒绝绑定。
+`candis_baseboard_decode()` 只接受上表身份。Dock 地址固定为 `0x50`。U6/U7 的 `0x51`、`0x52` 是模块 EEPROM 地址预留，当前 BSP 不根据这两个地址绑定产品、功能器件或驱动。
 
-固件的产品配置键为 `(Vendor ID, Board Type, Product ID, Hardware Revision, Assembly Variant)`。匹配还要检查父底板、物理接口及该组合的资源配置。硬件修订不得按数值大小推断兼容性，只有逐项验证过的修订或明确列出的等价修订可以命中。序列号用于实例追溯，驱动实例还要带位置和生命周期代次。
+## 校验顺序
 
-## 参数 TLV
+1. 读取完整 134 字节描述符。
+2. 检查 Magic 为 `ESP`。
+3. 分别校验 Identity、Manufacturing 和 Parameter 三段 CRC。
+4. 检查 Parameter Length 不超过 64。
+5. 检查 Vendor ID、SW Compatibility、Parameter Version 和 Board Flags。
+6. 检查 Board Type、Product ID 与 Hardware Revision 属于当前接受的身份表。
 
-每项依序编码 `Tag:u8, Length:u8, Value:byte[Length]`，无对齐或终止项。`Tag` 为 `0x01..0x7F`，`Length` 为 `1..62`，整个项必须在 Parameter Length 内。同一 Tag 只出现一次。生成器按 Tag 升序写入，读取器接受任意顺序。`0x00` 和 `0x80..0xFF` 为保留编码，V1 读到即拒绝参数段。未知的有效 Tag 跳过，返修合并时保留原值。
-
-| Tag | Value 长度 | 编码和范围 | 默认和用途 |
-| --- | ---: | --- | --- |
-| `0x01` | 1 | u8，`0..3`，相对原生显示方向的顺时针 90° 次数 | 缺省 `0`。仅用于配置明确支持的显示布局 |
-| `0x02` | 12 | 6 个 u16 小端值，依次为 X min/center/max、Y min/center/max，单位 mV。每轴 `0 ≤ min < center < max ≤ 3300` | 缺省采用已验证的产品标定。电压范围是编码上限，实际采样范围取决于板级电路、ADC 配置与标定 |
-| `0x03` | 2 | u16 小端，Assembly Variant，`0..0xFFFE`，`0xFFFF` 保留 | 缺省 `0`。非零值必须在同一产品、修订下明确登记。绑定时查对应的整套配置 |
-| `0x04` | 2 | u16 小端，传感器首选采样间隔 `250..60000` ms | 传感器参考配置缺省 1000 ms，实际调度需满足登记的设备最短测量周期等限制 |
-
-`0x05..0x3F` 由 Candis 维护者登记，`0x40..0x7F` 供各厂商在自己的 Vendor ID 内登记。TLV 适合少量有边界的参数。EEPROM 中不定义 GPIO 号、总线控制器、设备地址、电压、电流能力、写入权限或可执行内容。装配变体只引用已经审核的整套配置。产品配置未声明使用的可选参数不参与初始化。参数段畸形时禁止绑定并记录原因。可选参数缺省且配置没有已验证的默认值时，禁用依赖该参数的功能。
-
-用户可从 Host 设置调整显示方向、采样偏好等应用参数，系统保存到 Host 配置，并在驱动的已验证范围内生效。EEPROM 字段全部由授权工位维护。出厂后 Magic、版本、身份、标志、序列号、名称、制造字段和装配变体按工厂只读信息处理；授权校准工位可更新获准的 TLV 参数，流程见 [参数修改](eeprom-programming.md#参数修改与恢复)。
-
-## 校验与兼容
-
-1. 读足 134 字节，识别全 `FF` 或全 `00` 的空内容。先按 Magic 选择格式，校验三段 CRC，再判断兼容版本、参数版本和长度。256 字节的产线文件也按同一描述符区解码。
-2. 对 `CND` 检查保留位、字段范围、名称、日期及填充，验证 TLV 边界及已知字段取值。厂商和产品未登记、修订或变体未获准、位置不匹配时，只报告身份和原因。CRC 检查传输或存储错误，绑定还需要固件白名单和装配验证。
-3. 在 BTB `0x50` 单独接受老版 `ESP` Magic（`45 53 50`），限 Vendor `0xCA4E`，类型、产品和修订组合限 `0x31/0x0002/0x0101` 或 `0x31/0x0002/0x0102`。三段 CRC、版本 `0x0100`、参数版本 `1`、长度 `≤64` 仍须通过，历史 Board Flags 容许 bit 0，其他位为零。历史名称、制造信息和参数只供诊断，驱动采用该硬件修订的固件默认值。其他 `ESP` 描述符和 Dock 子槽的 `ESP` 描述符均无绑定路径。
-4. `CND` 读取失败时保留该错误。`ESP` 兼容分支只由实际 Magic 进入。出厂新镜像用 `CND`，需先确认目标镜像支持 `CND`。已部署的 `ESP` 底板在有兼容入口的固件中可以继续使用，迁移不要求现场重写 EEPROM。
-
-新增兼容的可选参数沿用 V1。对字段解释、强制参数或字节布局做不兼容更改时，定义新兼容版本及读取方式。V1 读者拒绝未知版本，保留旧镜像的启动路径。硬件修订、固件发布版本和参数版本独立管理。固件不会依据未知版本尝试按旧偏移初始化。
+任一步失败时，解码器不返回身份。完整器件为 256 字节，`0x86..0xFF` 位于描述符之外。当前 BSP 只读取描述符，不提供 EEPROM 写入接口。
 
 ## 格式依据
 
-ESP-Mosaico 的 V1 提供相同的字段偏移、三段 CRC 和 64 字节参数区。Candis 沿用其线布局，使用 `CND` 区分 Candis 的 ID 与 TLV 语义，并保留已部署格式的有限兼容分支。[ESP-Mosaico 模块管理器](https://github.com/esp-mosaico/esp-mosaico-bsp/tree/5674ab1f4cc250350d02e0f03c409b1877c954ca/components/mosaico_module_mgr)
+Candis Dock 使用 ESP-Mosaico V1 的字段偏移、三段 CRC 和 64 字节参数区。Candis 通过固定的 Vendor ID、Board Type、Product ID 和硬件修订限制实际可绑定的产品。[ESP-Mosaico module manager](https://github.com/esp-mosaico/esp-mosaico-bsp/tree/5674ab1f4cc250350d02e0f03c409b1877c954ca/components/mosaico_module_mgr)
