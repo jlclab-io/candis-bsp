@@ -32,7 +32,8 @@
 | [Wi-Fi 扫描](../../examples/wifi_scan) | 发现附近的无线接入点。 |
 | [BLE 扫描](../../examples/ble_scan) | 发现附近的蓝牙 LE 广播。 |
 | [Wi-Fi 与 BLE 共存](../../examples/bleprph_wifi_coex/README.md) | 在 BLE 广播期间扫描 Wi-Fi，连接无线网络并验证 HTTP 访问，同时接收 GATT 写入。 |
-| [睡眠](../../examples/sleep) | 进入由定时器唤醒的浅睡眠或深睡眠，唤醒后重新连接控制台。 |
+| [睡眠](../../examples/sleep) | 体验定时器浅睡/深睡，以及 TG28 PWRON 经共享 SYSTEM_IRQ_N 唤醒。见 [睡眠控制台](#睡眠控制台)。 |
+| [LP I²C](../../examples/lp_i2c/README.md) | HP 深睡时将 GPIO6/7 I²C 交接给 LP，LP 读取 TG28 并唤醒 HP，随后恢复 HP 总线控制。 |
 | [Flash 信息](../../examples/flash) | 读取 Flash 标识、容量和运行镜像哈希。 |
 
 ## 已定义板型配置
@@ -46,6 +47,19 @@
 使用 Dock TF 卡时，保持 LEFT U6 空置，或使其 GPIO39 线路保持高阻。使用 FAT 格式卡。使用核心板 LED 前，确保 U6.8 上的 GPIO37 可用。ADC 和马达示例中的默认 GPIO 仅用于演示应用配置接口，不属于 Dock 板级定义。
 
 TF 示例在 ESP-IDF 6.2 使用 VFS 只读浏览挂载，在 ESP-IDF 6.1 由示例将浏览操作限制为目录读取。
+
+## 睡眠控制台
+
+[睡眠示例](../../examples/sleep)通过应用控制台接收单字符命令。
+
+| 命令 | 操作 |
+| --- | --- |
+| `L` | 进入四秒浅睡眠 |
+| `D` | 进入四秒深睡眠 |
+| `P` | 使能 TG28 PWRON 经 SYSTEM_IRQ_N/GPIO0 唤醒并进入深睡 |
+| `?` | 打印上次唤醒状态 |
+
+执行 `P` 后，在 USB 设备断开后按下 PWRON。重新连接控制台后，示例会恢复 TG28 中断掩码并输出 `PWRON_WAKE_RESULT PASS`。
 
 ## RTC 控制台
 

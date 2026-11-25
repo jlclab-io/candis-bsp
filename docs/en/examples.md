@@ -32,7 +32,8 @@ From the root of the checkout, run `idf.py --preview -C examples/<name> build` i
 | [Wi-Fi scan](../../examples/wifi_scan) | Discover nearby access points. |
 | [BLE scan](../../examples/ble_scan) | Discover nearby Bluetooth LE advertisements. |
 | [Wi-Fi and BLE coexistence](../../examples/bleprph_wifi_coex/README.md) | Scan Wi-Fi while BLE advertises, connect to an access point, verify HTTP access, and receive a GATT write. |
-| [Sleep](../../examples/sleep) | Enter timer-woken light sleep or deep sleep and reconnect the console afterwards. |
+| [Sleep](../../examples/sleep) | Try timer-woken light/deep sleep and TG28 PWRON wake through the shared SYSTEM_IRQ_N input. See [Sleep console](#sleep-console). |
+| [LP I²C](../../examples/lp_i2c/README.md) | Hand GPIO6/7 I²C ownership from HP to LP during deep sleep, wake HP from the LP core, then restore HP ownership. |
 | [Flash information](../../examples/flash) | Read flash identification, capacity, and the running image hash. |
 
 ## Defined board profiles
@@ -46,6 +47,19 @@ From the root of the checkout, run `idf.py --preview -C examples/<name> build` i
 For Dock TF storage, keep LEFT U6 empty or leave GPIO39 high impedance. Use a FAT-formatted card. Leave GPIO37 available at U6.8 to use the core LED. The default GPIOs in the ADC and motor examples demonstrate application configuration and are not Dock board definitions.
 
 The TF example uses a read-only VFS mount for browsing on ESP-IDF 6.2. On ESP-IDF 6.1, the example restricts browsing to directory reads.
+
+## Sleep console
+
+The [sleep example](../../examples/sleep) accepts single-character commands over the application console.
+
+| Command | Action |
+| --- | --- |
+| `L` | Enter four-second light sleep |
+| `D` | Enter four-second deep sleep |
+| `P` | Arm TG28 PWRON wake on SYSTEM_IRQ_N/GPIO0 and enter deep sleep |
+| `?` | Print the previous wake state |
+
+For `P`, press PWRON after the USB device detaches. The example restores the TG28 interrupt mask and prints `PWRON_WAKE_RESULT PASS` after reconnecting the console.
 
 ## RTC console
 

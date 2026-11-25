@@ -76,6 +76,9 @@ esp_err_t candis_i2c_acquire(i2c_master_bus_handle_t *bus)
 
 esp_err_t candis_i2c_release(i2c_master_bus_handle_t bus)
 {
+    if (!bus) {
+        return ESP_ERR_INVALID_ARG;
+    }
     if (!candis_control_enter()) {
         return ESP_ERR_INVALID_STATE;
     }

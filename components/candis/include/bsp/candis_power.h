@@ -51,6 +51,7 @@ esp_err_t candis_power_ensure_default_charge(void);
 /** Acquire the legacy singleton application reference to DC1SW.
  * Set manage_power only when the attached loads are known. If acquisition fails,
  * call release to retry any pending rollback before trying again.
+ * With manage_power false, DC1SW must already be enabled.
  */
 esp_err_t candis_expansion_power_acquire(bool manage_power);
 
@@ -62,6 +63,7 @@ typedef struct candis_expansion_power_lease *candis_expansion_power_handle_t;
 /**
  * @brief Acquire a private DC1SW reference for an application or component.
  * @param[in] manage_power Allow enabling DC1SW after checking all attached loads.
+ * With false, DC1SW must already be enabled or acquisition returns ESP_ERR_INVALID_STATE.
  * @param[out] handle Empty handle slot owned by this caller. Do not copy or reuse a live handle.
  * @return ESP_OK on success. On error, a non-NULL handle requires unclaim to retry rollback.
  */

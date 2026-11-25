@@ -165,11 +165,22 @@ int main(void)
     assert(candis_storage_detect_read(&present) == ESP_OK && present);
     sdmmc_card_t *card = NULL;
     const candis_storage_mount_config_t ro = {.read_only = true};
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 2, 0)
     assert(candis_storage_mount_with_config("/card", &ro, &card) == ESP_OK);
     assert(card == &test_card && readonly && references == 2 && mounts == 1);
     assert(candis_storage_check_card() == ESP_OK);
     assert(candis_storage_detect_stop() == ESP_ERR_INVALID_STATE);
     assert(candis_storage_unmount() == ESP_OK && references == 1 && unmounts == 1);
+#else
+    assert(candis_storage_mount_with_config("/card", &ro, &card) == ESP_ERR_NOT_SUPPORTED);
+    assert(card == NULL && !readonly && references == 1 && mounts == 0);
+    assert(candis_storage_detect_stop() == ESP_OK && references == 0 && !detect_enabled);
+    config = config_for(TEST_CD, true);
+    assert(candis_storage_configure(&config) == ESP_OK);
+    assert(candis_storage_mount("/card", true, &card) == ESP_OK &&
+           card == &test_card && references == 1 && mounts == 1);
+    assert(candis_storage_unmount() == ESP_OK && references == 0 && unmounts == 1);
+#endif
     assert(candis_storage_detect_stop() == ESP_OK && references == 0 && !detect_enabled);
 
     assert(bsp_sdcard_mount() == ESP_OK && references == 1 && mounts == 2);

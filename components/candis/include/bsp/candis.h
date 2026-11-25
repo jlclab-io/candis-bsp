@@ -48,6 +48,7 @@ typedef struct {
     .brightness_percent = 50, \
     .enable_touch = true, \
     .sync_to_te = true, \
+    .manage_panel_power = true, \
     .bench_qspi_80mhz = true, \
     .async_flush = true, \
 }

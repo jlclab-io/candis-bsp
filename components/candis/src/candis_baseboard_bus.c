@@ -39,20 +39,29 @@ esp_err_t candis_baseboard_probe_state_on_bus(candis_baseboard_kind_t expected,
                                               candis_capability_state_t *state,
                                               candis_baseboard_info_t *info)
 {
-    if (!state) {
+    if (!state || !bus || address < 0x08 || address > 0x77) {
         return ESP_ERR_INVALID_ARG;
     }
     if (expected != CANDIS_BASEBOARD_BB) {
         *state = CANDIS_CAPABILITY_UNSUPPORTED;
         return ESP_OK;
     }
-    candis_baseboard_info_t detected;
-    const esp_err_t err = candis_baseboard_probe_on_bus(bus, address, &detected);
-    if (err == ESP_ERR_NOT_FOUND || err == ESP_ERR_TIMEOUT) {
+    const esp_err_t present = i2c_master_probe(bus, address, 40);
+    if (present == ESP_ERR_NOT_FOUND || present == ESP_ERR_TIMEOUT ||
+        present == ESP_ERR_INVALID_RESPONSE) {
         *state = CANDIS_CAPABILITY_NOT_PRESENT;
         return ESP_OK;
     }
-    if (err == ESP_ERR_NOT_SUPPORTED) {
+    ESP_RETURN_ON_ERROR(present, TAG, "probe descriptor address");
+    candis_baseboard_info_t detected;
+    const esp_err_t err = candis_baseboard_probe_on_bus(bus, address, &detected);
+    if (err == ESP_ERR_NOT_FOUND || err == ESP_ERR_TIMEOUT ||
+        err == ESP_ERR_INVALID_RESPONSE) {
+        *state = CANDIS_CAPABILITY_NOT_PRESENT;
+        return ESP_OK;
+    }
+    if (err == ESP_ERR_NOT_SUPPORTED || err == ESP_ERR_INVALID_CRC ||
+        err == ESP_ERR_INVALID_SIZE) {
         *state = CANDIS_CAPABILITY_UNSUPPORTED;
         return ESP_OK;
     }

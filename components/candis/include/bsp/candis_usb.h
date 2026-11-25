@@ -10,6 +10,7 @@ extern "C" {
 #endif
 
 /** Start native CDC. The application's stdio routing is independent.
+ * Repeated calls are idempotent while the device role remains active.
  * @return ESP_OK if started, ESP_ERR_INVALID_STATE if the OTG PHY is busy
  *         or a previous teardown is pending, ESP_ERR_NOT_SUPPORTED if disabled.
  * @note Use one OTG stack per port. Stop any separate example CDC console first. */

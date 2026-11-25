@@ -14,6 +14,11 @@ extern "C" {
 
 esp_err_t candis_baseboard_probe_on_bus(i2c_master_bus_handle_t bus, uint8_t address,
                                         candis_baseboard_info_t *info);
+/** Classify a board descriptor without treating an absent or unusable endpoint as a fatal probe error.
+ * A valid descriptor for another board, or a descriptor with corrupt metadata, is reported as
+ * CANDIS_CAPABILITY_UNSUPPORTED. A missing endpoint or an address/read NACK is reported as
+ * CANDIS_CAPABILITY_NOT_PRESENT. Other bus failures remain errors.
+ */
 esp_err_t candis_baseboard_probe_state_on_bus(candis_baseboard_kind_t expected,
                                               i2c_master_bus_handle_t bus, uint8_t address,
                                               candis_capability_state_t *state,

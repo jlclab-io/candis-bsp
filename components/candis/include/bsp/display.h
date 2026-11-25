@@ -79,9 +79,11 @@ bool bsp_display_lock(uint32_t timeout_ms);
 void bsp_display_unlock(void);
 #endif
 
-/** Put the panel and CST9220 into sleep without releasing their resources. */
+/** Put the panel and CST9220 into sleep without releasing their resources.
+ * Repeated calls while already asleep are no-ops returning ESP_OK. */
 esp_err_t bsp_display_enter_sleep(void);
-/** Wake the panel and CST9220 after bsp_display_enter_sleep(). */
+/** Wake the panel and CST9220 after bsp_display_enter_sleep().
+ * Repeated calls while already awake are no-ops returning ESP_OK. */
 esp_err_t bsp_display_exit_sleep(void);
 
 /**
