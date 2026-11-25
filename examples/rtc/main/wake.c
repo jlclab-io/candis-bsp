@@ -7,12 +7,16 @@
 #include "driver/gpio.h"
 #include "esp_attr.h"
 #include "esp_check.h"
+#include "esp_rom_sys.h"
 #include "esp_sleep.h"
 #include "esp_system.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #define WAKE_GPIO GPIO_NUM_0
 #define WAKE_MASK (1ULL << WAKE_GPIO)
 #define GUARD_US 5000000
+#define RTC_SECOND_TIMEOUT_MS 1200
 #define TG28_ADDRESS 0x34
 #define TG28_IRQ_ENABLE 0x40
 #define TG28_DCDC_ENABLE 0x80
@@ -126,8 +130,11 @@ void candis_rtc_example_resume(void)
         return;
     }
     const uint32_t causes = esp_sleep_get_wakeup_causes();
+    const esp_reset_reason_t reset = esp_reset_reason();
+    printf("RTC_RESUME reset=%d rom=%d wake_causes=0x%08lx\n",
+           reset, esp_rom_get_reset_reason(0), (unsigned long)causes);
     s_wake.available = true;
-    s_wake.deep_sleep = esp_reset_reason() == ESP_RST_DEEPSLEEP;
+    s_wake.deep_sleep = reset == ESP_RST_DEEPSLEEP;
     s_wake.ext1 = (esp_sleep_get_ext1_wakeup_status() & WAKE_MASK) != 0;
     s_wake.guard = (causes & (1U << ESP_SLEEP_WAKEUP_TIMER)) != 0;
     s_wake.restored = restore_wake_sources(&s_wake.updated);
@@ -143,6 +150,22 @@ void candis_rtc_example_report_wake(void)
     printf("RTC_WAKE %s deep=%d ext1=%d guard=%d update=%d restore=%s\n",
            pass ? "ESP_OK" : "FAIL", s_wake.deep_sleep, s_wake.ext1, s_wake.guard,
            s_wake.updated, esp_err_to_name(s_wake.restored));
+}
+
+static esp_err_t wait_for_second_update(void)
+{
+    struct tm utc;
+    ESP_RETURN_ON_ERROR(candis_rtc_get_time(&utc), TAG, "read RTC before arming wake");
+    const int second = utc.tm_sec;
+    const TickType_t start = xTaskGetTickCount();
+    do {
+        vTaskDelay(pdMS_TO_TICKS(20) + 1);
+        ESP_RETURN_ON_ERROR(candis_rtc_get_time(&utc), TAG, "read RTC second");
+        if (utc.tm_sec != second) {
+            return ESP_OK;
+        }
+    } while (xTaskGetTickCount() - start < pdMS_TO_TICKS(RTC_SECOND_TIMEOUT_MS));
+    return ESP_ERR_TIMEOUT;
 }
 
 esp_err_t candis_rtc_example_sleep(void)
@@ -176,7 +199,15 @@ esp_err_t candis_rtc_example_sleep(void)
         result = candis_example_usb_stop();
     }
     if (result == ESP_OK) {
+        /* The RTC pulses IRQ at the second boundary. Arm just after a tick
+         * to allow the ESP32-S31 to finish entering deep sleep. */
+        result = wait_for_second_update();
+    }
+    if (result == ESP_OK) {
         result = candis_rtc_arm_update_irq(&s_saved.rtc);
+    }
+    if (result == ESP_OK && gpio_get_level(WAKE_GPIO) != 1) {
+        result = ESP_ERR_INVALID_STATE;
     }
     if (result == ESP_OK) {
         result = esp_deep_sleep_try_to_start();

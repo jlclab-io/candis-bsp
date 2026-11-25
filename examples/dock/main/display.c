@@ -78,9 +78,13 @@ static esp_err_t setup_display(lv_display_t *display, bool touch)
     }
     lv_obj_t *screen = lv_display_get_screen_active(display);
     lv_obj_set_scrollable(screen, false);
-    s_surface = make_shape(screen, BSP_LCD_H_RES, BSP_LCD_V_RES, 0x090c14);
+    s_surface = make_shape(screen, BSP_LCD_H_RES, BSP_LCD_V_RES, 0xffffff);
     lv_obj_t *label = lv_label_create(s_surface);
-    lv_obj_set_style_text_color(label, lv_color_hex(0xe2e8f0), 0);
+    lv_obj_set_style_text_color(label, lv_color_hex(0x111111), 0);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_outline_stroke_color(label, lv_color_hex(0x111111), 0);
+    lv_obj_set_style_text_outline_stroke_width(label, 1, 0);
+    lv_obj_set_style_text_outline_stroke_opa(label, LV_OPA_COVER, 0);
     lv_label_set_text(label, touch ? "Candis Dock\nDrag to check touch" : "Candis Dock\nPanel check");
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 42);
     s_bar = make_shape(s_surface, BAR_WIDTH, 112, 0x4bd1d3);
@@ -115,7 +119,7 @@ esp_err_t dock_display_start(bool touch)
     candis_display_config_t config = CANDIS_DISPLAY_CONFIG_DEFAULT();
     config.manage_panel_power = true;
     config.enable_touch = touch;
-    config.brightness_percent = 35;
+    config.brightness_percent = 100;
     lv_display_t *display;
     s_needs_stop = true;
     esp_err_t err = candis_display_start(&config, &display);

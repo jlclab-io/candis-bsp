@@ -45,6 +45,16 @@ def find_port(pid, serial, location=''):
     return ports[0] if ports else None
 
 
+def wait_for_application(serial, timeout=10):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        application = find_port(PID_APPLICATION, serial)
+        if application is not None:
+            return application
+        time.sleep(0.02)
+    raise RuntimeError('Candis USB OTG application port did not enumerate')
+
+
 def wait_for_rom(serial, location):
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline:
@@ -147,7 +157,7 @@ def main():
         if rom is None:
             application = find_port(PID_APPLICATION, serial)
             if application is None:
-                raise RuntimeError('Candis USB OTG application or ROM port not found')
+                application = wait_for_application(serial)
             try:
                 request_rom(application)
             except OSError:

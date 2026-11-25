@@ -22,7 +22,7 @@ dependencies:
   tg28-esp:
     dependencies:
     - name: idf
-      version: '>=6.2,<6.3'
+      version: '>=6.1,<6.3'
     source:
       path: ../../components/tg28-esp
       type: local

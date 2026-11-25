@@ -1,10 +1,10 @@
 # TG28-ESP
 
-An ESP-IDF 6.2 I²C driver for TG28-ESP power management. It exposes supply and charge telemetry, regulator settings, charging configuration, interrupt handling, and power sequencing.
+An ESP-IDF 6.2 I²C driver with 6.1 compatibility for TG28-ESP power management. It exposes supply and charge telemetry, regulator settings, charging configuration, interrupt handling, and power sequencing. The component has no dependency on the Candis BSP and can be used directly in another ESP-IDF application.
 
 ## Use in an application
 
-Add a dependency on `components/tg28-esp` and include [`tg28_esp.h`](include/tg28_esp.h). Create the I²C master bus first.
+Add a dependency on `components/tg28-esp` and include [`tg28_esp.h`](include/tg28_esp.h). Create the I²C master bus first. The standalone [`tg28` example](../../examples/tg28) is built without `candis`.
 
 ```c
 #include "tg28_esp.h"

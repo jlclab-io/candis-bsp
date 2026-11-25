@@ -64,6 +64,22 @@ jobs:
       - name: Run host tests
         run: python3 -m unittest discover -s tests -v
 
+  idf61-smoke:
+    name: ESP-IDF 6.1 compatibility
+    needs: checks
+    if: needs.checks.outputs.builds != '[]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      IDF_REVISION: 051e4c4eb20346e043cdd47bc388fde75ff8af63 # v6.1.1
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: ./.github/actions/setup-esp32s31
+      - name: Build representative applications
+        run: |
+          source "$RUNNER_TEMP/esp-idf/export.sh"
+          python3 tools/ci_matrix.py build --targets '["candis_minimal:default","display:default","bsp_api:default","rtc:default","bleprph_wifi_coex:default"]'
+
   compile:
     needs: checks
     if: needs.checks.outputs.groups != '[]'

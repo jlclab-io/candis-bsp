@@ -5,6 +5,7 @@
 #include "bsp/config.h"
 #include "bsp/touch.h"
 #include "bsp/candis_baseboard.h"
+#include "bsp/candis_baseboard_bus.h"
 #include "bsp/candis_imu.h"
 #include "bsp/candis_motor.h"
 #include "bsp/candis_power.h"

@@ -21,19 +21,18 @@ The `candis` component targets Candis revision 1.2. The board uses an ESP32-S31 
 - **Display.** Use a verified supply on ALDO1 before starting the panel. The BSP leaves the rail unchanged by default. The panel's VDDIO limit is 3.35 V. A nominal 3.3 V ALDO1 with ±3% tolerance can reach 3.399 V before transients. Check the actual rail against the module's limits before permitting software to enable it.
 - **Display timing.** The BSP defaults to 80 MHz QSPI. For a 50 MHz application configuration, set `bench_qspi_80mhz = false` in `candis_display_config_t`. Qualify the chosen speed over your operating conditions.
 - **Audio.** Supply ALDO2 and connect the intended microphones and speakers before using the audio examples. Use the [Dock speaker wiring](../../components/candis-dock/README.md#hardware) to select the correct PCM channel.
-- **Expansion.** DC1SW is a shared rail for TF, the baseboard EEPROM, BMI270, and attached Dock modules. Check the complete load and power sequence before enabling rail management. Connect or remove baseboards and modules with all supplies disconnected.
+- **Expansion.** The BTB exposes TG28 rails, GPIO, I²C, USB-related pins, audio signals, and power. The core BSP does not assign baseboard devices or GPIO. On the current Dock, DC1SW is shared by TF, the baseboard EEPROM, BMI270, and attached modules. Check the complete load and power sequence before enabling rail management.
 - **USB Host.** The Type-C circuit controls connector VBUS and current limiting. Host stop releases the data stack and PHY. Check the source setup and peripheral load before using Host.
 
 ## Expansion interfaces
 
-| Resource | Assignment |
+The `candis` component owns the fixed core-board resources above. Baseboard device models, addresses, storage pins, motor PWM, and optional I²C controllers stay in the application or in a dedicated baseboard component.
+
+| Assembly | Assignment owner |
 | --- | --- |
-| Expansion I²C | I²C1, SCL GPIO58, SDA GPIO59. Release UART0 and any external drivers on both pins before probing |
-| Baseboard EEPROM | `0x50` on expansion I²C with DC1SW powered. Current BSP support is described in [Expansion hardware](expansion.md#bsp-support) |
-| TF card | Four-bit SDMMC, D0–D3 GPIO20–23, CLK GPIO24, CMD GPIO25. Card detect on Dock is GPIO39 |
-| Motion | BMI270 at `0x68` on main I²C, supplied by DC1SW. INT1 connects to GPIO38. The BSP polls the sensor |
-| M1 motor | GPIO5 drives an active-high low-side switch. BLDO2 supplies the motor at 2700 mV during a BSP pulse. Confirm the fitted load and USB input |
-| OV5640 camera | The fixture uses GPIO39 for reset, GPIO40 for optional PWDN control, and GPIO46–57 for DVP and XCLK. Configure these signals in the [application](../../components/candis-camera/README.md#application-wiring) |
-| Dock camera connector | 8-bit DVP on GPIO46–57, SCCB on expansion I²C GPIO58/59, and PMU-controlled BLDO1, DC1SW, ALDO3, and ALDO4 supply pins. See the [U7 connector pin map](expansion.md#dock-20-pin-headers) |
+| Core BSP | No implicit baseboard SDMMC slot, card detect, IMU address, motor GPIO, or expansion I²C controller |
+| Candis Dock rev. 1.1/1.2 | `candis-dock` owns I²C1 on GPIO58/59, descriptor `0x50`, TF GPIO20–25 with CD GPIO39, known Dock speaker routing, and the validated Dock revision rules |
+| Application-owned peripherals | The storage, motion, motor, and camera examples show how to supply application-specific pins and devices. Adjust each profile for the actual assembly. See [TF card](../../examples/tf_card), [motion](../../examples/motion), [motor](../../examples/motor), and [camera](../../examples/camera) |
+| Dock camera connector | The current Dock exposes 8-bit DVP on GPIO46–57, SCCB on GPIO58/59, and PMU-controlled BLDO1, DC1SW, ALDO3, and ALDO4. The camera example passes this wiring through its resource adapter. See the [U7 connector pin map](expansion.md#dock-20-pin-headers) |
 
 See [Expansion hardware](expansion.md) for the BTB and Dock connector pinouts.

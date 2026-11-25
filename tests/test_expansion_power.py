@@ -14,6 +14,7 @@ TG28 = COMPONENT.parent / 'tg28-esp'
 
 TEST_SOURCE = """
 #include <assert.h>
+#include <string.h>
 #include "bsp/candis_power.h"
 #include "candis_internal.h"
 
@@ -24,6 +25,8 @@ static unsigned bus_users;
 static unsigned writes;
 static bool nack_next_read;
 static bool fail_enable, fail_rollback;
+static bool fail_charge_readback;
+static unsigned status_reads, status_nack_mask;
 
 bool candis_control_enter(void) { return true; }
 void candis_control_leave(void) { }
@@ -60,12 +63,24 @@ esp_err_t i2c_master_bus_rm_device(i2c_master_dev_handle_t dev)
 esp_err_t i2c_master_transmit_receive(i2c_master_dev_handle_t dev, const uint8_t *reg, size_t reg_size,
                                      uint8_t *output, size_t size, int timeout)
 {
-    assert(dev == &enables && reg_size == 1 && size == 1 && timeout == 100);
+    assert(dev == &enables && reg_size == 1 && *reg + size <= sizeof(registers) && timeout == 100);
     if (nack_next_read) {
         nack_next_read = false;
         return ESP_ERR_INVALID_RESPONSE;
     }
-    *output = registers[*reg];
+    if (*reg == 0x00 && status_nack_mask) {
+        const bool nack = status_nack_mask & 1;
+        status_nack_mask >>= 1;
+        ++status_reads;
+        if (nack) {
+            return ESP_ERR_INVALID_RESPONSE;
+        }
+    }
+    if (*reg == 0x62 && registers[*reg] == 0xa8 && fail_charge_readback) {
+        fail_charge_readback = false;
+        return ESP_ERR_INVALID_RESPONSE;
+    }
+    memcpy(output, registers + *reg, size);
     return ESP_OK;
 }
 
@@ -111,10 +126,10 @@ int main(void)
     enables &= ~ALDO3;
     assert(candis_power_release(&first) == ESP_OK && !enables && !bus_users);
 
-    candis_expansion_ldo_handle_t ldo = NULL;
-    candis_expansion_ldo_handle_t duplicate = NULL;
+    candis_expansion_ldo_handle_t ldo = CANDIS_EXPANSION_LDO_HANDLE_NONE;
+    candis_expansion_ldo_handle_t duplicate = CANDIS_EXPANSION_LDO_HANDLE_NONE;
     assert(candis_expansion_ldo_acquire(CANDIS_EXPANSION_ALDO3, 1550, 5, &ldo) == ESP_ERR_INVALID_ARG);
-    assert(!ldo && !bus_users);
+    assert(ldo == CANDIS_EXPANSION_LDO_HANDLE_NONE && !bus_users);
 
     registers[0x94] = 0xa0 | 28;
     nack_next_read = true;
@@ -123,7 +138,7 @@ int main(void)
     assert(candis_expansion_ldo_acquire(CANDIS_EXPANSION_ALDO3, 1500, 5, &ldo) == ESP_ERR_INVALID_STATE);
     assert(ldo && bus_users == 1 && enables == ALDO3);
     assert(candis_expansion_ldo_acquire(CANDIS_EXPANSION_ALDO3, 1500, 5, &duplicate) == ESP_ERR_INVALID_STATE);
-    assert(!duplicate && bus_users == 1);
+    assert(duplicate == CANDIS_EXPANSION_LDO_HANDLE_NONE && bus_users == 1);
     assert(candis_expansion_ldo_release(ldo) == ESP_OK && !enables &&
            registers[0x94] == (0xa0 | 28) && !bus_users);
 
@@ -157,12 +172,56 @@ int main(void)
     assert(candis_expansion_power_unclaim(&dock) == ESP_OK && !dock && !enables && !bus_users);
     assert(candis_expansion_power_unclaim(&dock) == ESP_OK && !bus_users);
 
+    fail_enable = false;
+    const candis_expansion_ldo_handle_t stale = ldo;
+    ldo = CANDIS_EXPANSION_LDO_HANDLE_NONE;
+    assert(candis_expansion_ldo_acquire(CANDIS_EXPANSION_ALDO3, 1500, 5, &ldo) == ESP_OK);
+    assert(ldo != stale && enables == ALDO3 && bus_users == 1);
+    assert(candis_expansion_ldo_release(stale) == ESP_ERR_INVALID_STATE);
+    assert(enables == ALDO3 && bus_users == 1);
+    fail_rollback = true;
+    assert(candis_expansion_ldo_release(ldo) == ESP_FAIL && enables == ALDO3 && bus_users == 1);
+    fail_rollback = false;
+    assert(candis_expansion_ldo_release(ldo) == ESP_OK && !enables && !bus_users);
+    ldo = CANDIS_EXPANSION_LDO_HANDLE_NONE;
+
     candis_power_t panel = {.rail = CANDIS_RAIL_DISPLAY};
     candis_power_t touch = {.rail = CANDIS_RAIL_DISPLAY};
     assert(candis_power_acquire(&panel, true, 150) == ESP_OK && enables == CANDIS_RAIL_DISPLAY);
     assert(candis_power_acquire(&touch, false, 0) == ESP_OK && bus_users == 1);
     assert(candis_power_release(&panel) == ESP_OK && enables == CANDIS_RAIL_DISPLAY);
     assert(candis_power_release(&touch) == ESP_OK && !enables && !bus_users);
+
+    registers[0x03] = TG28_ESP_CHIP_ID;
+    registers[0x00] = 0x18;
+    registers[0x01] = 0x32;
+    registers[0x18] = 0x0a;
+    registers[0x62] = 0xa2;
+    registers[0x64] = 3;
+    registers[0x67] = 0x44;
+    registers[0x68] = 1;
+    const unsigned before_charge = writes;
+    assert(candis_power_ensure_default_charge() == ESP_ERR_INVALID_STATE);
+    assert(writes == before_charge && registers[0x62] == 0xa2 && !bus_users);
+
+    registers[0x00] |= 0x20;
+    registers[0x4a] = 1;
+    assert(candis_power_ensure_default_charge() == ESP_ERR_INVALID_STATE);
+    assert(writes == before_charge && registers[0x62] == 0xa2 && !bus_users);
+
+    registers[0x4a] = 0;
+    status_nack_mask = (1U << 1) | (1U << 4);
+    assert(candis_power_ensure_default_charge() == ESP_ERR_INVALID_RESPONSE);
+    assert(status_reads == 5 && writes == before_charge && registers[0x62] == 0xa2 && !bus_users);
+
+    fail_charge_readback = true;
+    assert(candis_power_ensure_default_charge() == ESP_ERR_INVALID_RESPONSE);
+    assert(writes == before_charge + 2 && registers[0x62] == 0xa2 && !bus_users);
+
+    assert(candis_power_ensure_default_charge() == ESP_OK);
+    assert(writes == before_charge + 3 && registers[0x62] == 0xa8 && !bus_users);
+    assert(candis_power_ensure_default_charge() == ESP_OK);
+    assert(writes == before_charge + 3 && registers[0x62] == 0xa8 && !bus_users);
     return 0;
 }
 """
@@ -185,6 +244,8 @@ class ExpansionPowerTest(unittest.TestCase):
                 '#define ESP_RETURN_ON_FALSE(condition, error, tag, ...) do { (void)(tag); '
                 'if (!(condition)) return error; } while (0)\n'
                 '#define ESP_LOGE(tag, ...) do { (void)(tag); } while (0)\n'
+                '#define ESP_LOGI(tag, ...) do { (void)(tag); } while (0)\n'
+                '#define ESP_LOGW(tag, ...) do { (void)(tag); } while (0)\n'
             )
             (root / 'freertos').mkdir()
             (root / 'freertos/FreeRTOS.h').write_text('#define pdMS_TO_TICKS(ms) (ms)\n')
@@ -198,7 +259,8 @@ class ExpansionPowerTest(unittest.TestCase):
             subprocess.run(['cc', '-std=c11', '-Wall', '-Werror', f'-I{root}', f'-I{COMPONENT}', f"-I{COMPONENT / 'include'}",
                             f"-I{COMPONENT / 'priv_include'}", f"-I{TG28 / 'include'}",
                             f"-I{TG28 / 'priv_include'}", f"-I{idf / 'components/esp_common/include'}",
-                            str(driver), str(TG28 / 'src/tg28_esp.c'), str(TG28 / 'src/tg28_esp_regulator.c'), str(source),
+                            str(driver), str(TG28 / 'src/tg28_esp.c'), str(TG28 / 'src/tg28_esp_regulator.c'),
+                            str(TG28 / 'src/tg28_esp_charger.c'), str(source),
                             '-o', str(executable)], check=True)
             subprocess.run([str(executable)], check=True)
 

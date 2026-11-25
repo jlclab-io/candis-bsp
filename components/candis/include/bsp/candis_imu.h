@@ -3,8 +3,9 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include "bsp/candis_baseboard.h"
+#include "bsp/candis_types.h"
 #include "bsp/config.h"
+#include "driver/i2c_master.h"
 #include "esp_err.h"
 
 #ifdef __cplusplus
@@ -19,35 +20,38 @@ typedef struct {
 } candis_imu_sample_t;
 
 typedef struct {
-    bool manage_power;
+    i2c_master_bus_handle_t i2c_bus; /**< Caller-owned, already powered bus. */
+    uint8_t i2c_address;             /**< Caller-selected 7-bit BMI270 address. */
     uint16_t sample_rate_hz; /**< Both sensors, 25/50/100/200/400/800/1600 Hz. */
     uint8_t accel_range_g;   /**< Full-scale magnitude, 2/4/8/16 g. */
     uint16_t gyro_range_dps; /**< Full-scale magnitude, 125/250/500/1000/2000 dps. */
 } candis_imu_config_t;
 
-#define CANDIS_IMU_CONFIG_DEFAULT() { .sample_rate_hz = 100, .accel_range_g = 4, .gyro_range_dps = 1000 }
-
-/** Start the BMI270 at 100 Hz, ±4 g and ±1000 dps using I2C 0x68.
- * DC1SW powers the expansion devices. Pass true only for a confirmed load.
- * The driver polls both sensors and leaves their interrupt output disabled.
- * Enable CONFIG_CANDIS_IMU to link this API. If cleanup fails, retry stop.
- */
-esp_err_t candis_imu_start(bool manage_power);
+#define CANDIS_IMU_CONFIG_DEFAULT() { \
+    .sample_rate_hz = 100, \
+    .accel_range_g = 4, \
+    .gyro_range_dps = 1000, \
+}
 
 /**
- * @brief Start using the supplied configuration and acquire one DC1SW lease.
+ * @brief Start using a caller-owned I2C bus and caller-selected address.
+ * The caller owns sensing power and must keep the bus alive until stop.
  * @return ESP_ERR_INVALID_ARG for unsupported settings, ESP_ERR_NOT_FOUND if
- *         no BMI270 responds, or ESP_ERR_INVALID_STATE if already acquired or the
- *         rail is off without permission to enable it. Underlying bus errors propagate.
+ *         no BMI270 responds, or ESP_ERR_INVALID_STATE if already acquired.
+ *         Underlying bus errors propagate.
  */
 esp_err_t candis_imu_start_with_config(const candis_imu_config_t *config);
 
-/** Stop the sensor blocks and enable advanced power save. Keeps the DC1SW lease. */
+/** Probe the caller-selected bus/address without starting measurements. */
+esp_err_t candis_imu_probe(const candis_imu_config_t *config,
+                           candis_capability_state_t *state);
+
+/** Stop the sensor blocks and enable advanced power save while retaining the caller's bus. */
 esp_err_t candis_imu_suspend(void);
 /** Exit advanced power save and resume with the same sampling settings. */
 esp_err_t candis_imu_resume(void);
 
-/** Query the active session or read chip ID at 0x68 while DC1SW is powered. */
+/** Query the active session. Use candis_imu_probe() before starting. */
 #if BSP_CAPS_IMU
 esp_err_t candis_imu_get_state(candis_capability_state_t *state);
 #else
@@ -71,7 +75,7 @@ esp_err_t candis_imu_read(candis_imu_sample_t *sample);
 /** Read the BMI270 die temperature in °C. ESP_ERR_NOT_FINISHED means the first conversion is pending. */
 esp_err_t candis_imu_read_temperature(float *celsius);
 
-/** Stop measurements and release this client’s DC1SW lease. */
+/** Stop measurements and remove the BMI270 device from the caller's bus. */
 esp_err_t candis_imu_stop(void);
 
 #ifdef __cplusplus

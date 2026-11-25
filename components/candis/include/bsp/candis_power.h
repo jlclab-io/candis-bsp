@@ -24,8 +24,8 @@ typedef struct {
     bool system_on;
     bool battery_present;
     bool battery_charging;
-    bool motor_rail_on;
-    uint16_t motor_rail_mv;
+    bool bldo2_on;
+    uint16_t bldo2_mv;
 } candis_supply_state_t;
 
 /** Read TG28 supply and charge status, and the BLDO2 programmed setpoint. */
@@ -33,6 +33,20 @@ esp_err_t candis_power_read_supply(candis_supply_state_t *state);
 
 /** Read VBAT in microvolts when a battery is present and the VBAT ADC is already enabled. */
 esp_err_t candis_power_read_battery_uv(uint32_t *microvolts);
+
+#define CANDIS_OTP_CHARGE_CURRENT_MA 50
+#define CANDIS_DEFAULT_CHARGE_CURRENT_MA 200
+
+/**
+ * @brief Apply the board's 200 mA charge-current default after validating the charger.
+ *
+ * The TG28-ESP OTP value for this board is 50 mA. This call changes only
+ * REG62[4:0] after three consecutive samples establish that VBUS and the battery are
+ * present, the charger is enabled, CV is 4.20 V, safety timers are enabled,
+ * and no charger or input-limit fault is active. It then reads the setting back.
+ * Call from a control task when VBUS and the battery become available following startup.
+ */
+esp_err_t candis_power_ensure_default_charge(void);
 
 /** Acquire the legacy singleton application reference to DC1SW.
  * Set manage_power only when the attached loads are known. If acquisition fails,
@@ -67,23 +81,28 @@ typedef enum {
     CANDIS_EXPANSION_BLDO2,
 } candis_expansion_ldo_t;
 
-typedef struct candis_expansion_ldo_lease *candis_expansion_ldo_handle_t;
+/** Value token identifying one expansion LDO lease generation. */
+typedef uintptr_t candis_expansion_ldo_handle_t;
+#define CANDIS_EXPANSION_LDO_HANDLE_NONE ((candis_expansion_ldo_handle_t)0)
 
 /**
  * Claim an expansion LDO exclusively. The attached expansion must support the
  * requested voltage (500–3500 mV, in 100 mV steps).
  *
  * An already enabled rail is accepted only at the requested setting and stays
- * enabled on release. A non-NULL output on error retains a partial lease and
- * must be passed to candis_expansion_ldo_release() to retry cleanup. Initialize
- * the output handle to NULL before its first acquisition. An active handle is
- * preserved and rejected with ESP_ERR_INVALID_STATE. A released handle may be
- * reused.
+ * enabled on release. Initialize the output slot to CANDIS_EXPANSION_LDO_HANDLE_NONE.
+ * A token returned on error represents a partial lease. Pass it to
+ * candis_expansion_ldo_release() to retry cleanup. An output slot containing
+ * an active token is preserved and rejected with ESP_ERR_INVALID_STATE.
+ * The caller must clear the released output slot with
+ * CANDIS_EXPANSION_LDO_HANDLE_NONE before reusing it.
  */
 esp_err_t candis_expansion_ldo_acquire(candis_expansion_ldo_t rail, uint16_t voltage_mv, unsigned settle_ms,
                                       candis_expansion_ldo_handle_t *handle);
 
-/** Restore the original rail state. Retry with the same handle if release fails. */
+/** Restore the original rail state. Retry with the same token if cleanup fails.
+ * A release request for an expired token returns ESP_ERR_INVALID_STATE.
+ */
 esp_err_t candis_expansion_ldo_release(candis_expansion_ldo_handle_t handle);
 
 #ifdef __cplusplus

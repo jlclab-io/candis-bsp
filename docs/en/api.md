@@ -11,14 +11,14 @@ The common interfaces follow the [ESP-BSP S31 reference](https://github.com/espr
 | Shared I²C | `bsp_i2c_init()` / `bsp_i2c_get_handle()` | `bsp_i2c_deinit()` |
 | AMOLED and LVGL touch | `bsp_display_start()` / `bsp_display_start_with_config()` / `bsp_display_get_input_dev()` | `candis_display_stop()` or `bsp_display_stop()` |
 | Native panel and touch | `bsp_display_new()` / `bsp_touch_new()` | `esp_lcd_panel_del()` / `bsp_touch_del()` |
-| TF card | `bsp_sdcard_mount()` / `bsp_sdcard_get_handle()` | `bsp_sdcard_unmount()` |
+| TF card | `candis_storage_configure()` then `bsp_sdcard_mount()` or `candis_storage_mount_with_config()` | `bsp_sdcard_unmount()` or `candis_storage_unmount()` |
 | ES8389 audio | `bsp_audio_codec_speaker_init()` / `bsp_audio_codec_microphone_init()` | `bsp_audio_deinit()` |
-| BMI270 | `candis_imu_start()` / `candis_imu_read()` | `candis_imu_stop()` |
+| BMI270 | `candis_imu_start_with_config()` / `candis_imu_read()` | `candis_imu_stop()` |
 | OTG CDC Device / Host | `candis_usb_device_start()` / `bsp_usb_host_start()` | `candis_usb_device_stop()` / `bsp_usb_host_stop()` |
 | Power | `candis_power_read()` / `candis_power_read_supply()` / `candis_power_read_battery_uv()` | Read-only calls release their own I²C reference |
-| Motor | `candis_motor_pulse()` / `candis_motor_get_state()` | Automatic cutoff and release, or `candis_motor_stop()` |
-| RTC and baseboard | `candis_rtc_get_time()` / `candis_baseboard_probe()` | One-shot access |
-| Optional baseboard state | `candis_baseboard_probe_state()` / `candis_dock_get_state()` | Returns unsupported, not present, present, or initialized |
+| Motor | `candis_motor_init()` / `candis_motor_start_amplitude()` / `candis_motor_set_amplitude()` / `candis_motor_set_frequency()` / `candis_motor_get_state()` | `candis_motor_stop()`; bounded pulses also release automatically |
+| RTC and baseboard | `candis_rtc_get_time()` / `candis_baseboard_probe_on_bus()` | One-shot access |
+| Optional baseboard state | `candis_baseboard_probe_state_on_bus()` / `candis_dock_get_state()` | Returns unsupported, not present, present, or initialized |
 
 ## ESP-BSP compatibility
 
@@ -29,12 +29,11 @@ The common interfaces follow the [ESP-BSP S31 reference](https://github.com/espr
 | `bsp_touch_new()` | Implemented for CST9220, with configurable axis exchange and mirroring |
 | `bsp_i2c_init/get_handle/deinit` | One idempotent reference for the standard calls |
 | `bsp_audio_init/get_codec_itf/codec_*_init` | One duplex session when audio is enabled |
-| `bsp_sdcard_mount()` and SDMMC host/slot helpers | Implemented for fixed four-bit Candis wiring. `bsp_sdcard_sdspi_mount()` returns `ESP_ERR_NOT_SUPPORTED` because SPI2 is owned by the AMOLED |
-| `bsp_feature_enable(BSP_FEATURE_SD, enable)` | Owns a DC1SW reference for a verified Dock. A mount owns an independent reference |
+| `bsp_sdcard_mount()` and SDMMC host/slot helpers | Implemented for the application-configured SDMMC slot. `bsp_sdcard_sdspi_mount()` returns `ESP_ERR_NOT_SUPPORTED` |
 | `bsp_usb_host_start/stop` | Controls the Host data role. The Type-C circuit controls VBUS and current limiting |
 | SPIFFS and the Korvo-specific ADC, LED, button and camera APIs | Application-specific partitions and native drivers. Camera has a separate component |
 
-`BSP_CAPS_*` is a compile-time declaration for the Candis core board and enabled build options. `BSP_CAPS_SDCARD` and `BSP_CAPS_MOTOR` remain zero because those functions depend on the optional Dock. The Dock is identified through `candis_baseboard_probe()`. `ESP_ERR_NOT_FOUND` means the probe did not find a descriptor, `ESP_ERR_INVALID_CRC` means the descriptor is unusable, and `ESP_ERR_NOT_SUPPORTED` means the descriptor is valid but outside the supported product and revision set. Component open calls return `ESP_ERR_INVALID_STATE` when their required power or initialization ownership is not in place.
+`BSP_CAPS_*` is a compile-time declaration for the Candis core board and enabled build options. `BSP_CAPS_SDCARD` and `BSP_CAPS_MOTOR` remain zero because the transport and output are application-defined. A baseboard descriptor is decoded after the application supplies its bus and address. The [Dock component](../../components/candis-dock/README.md) supplies the known Dock address and validates its revisions. `ESP_ERR_NOT_FOUND` means the probe did not find a descriptor, `ESP_ERR_INVALID_CRC` means the descriptor is unusable, and `ESP_ERR_NOT_SUPPORTED` means the descriptor is outside the supported format or identity. Component open calls return `ESP_ERR_INVALID_STATE` when their required power or initialization ownership is not in place.
 
 Use the state APIs after powering the expansion domain and releasing UART0. `PRESENT` means the expected descriptor is valid and the component has not been opened. `INITIALIZED` means that component owns its active session. A transport or power error is returned separately from the state value.
 
@@ -79,7 +78,7 @@ The standard I²C entry points share one idempotent reference. `candis_i2c_acqui
 
 Use `candis_i2c_acquire()` to share the main I²C bus on GPIO6/7. Remove application-owned devices before releasing the matching reference. Release all HP I²C users before switching these pins to LP I²C. Leave the PMU under BSP ownership.
 
-Dock, storage and IMU own separate DC1SW references. Use `candis_expansion_power_claim()/unclaim()` with an initially NULL handle for additional application references. The existing `candis_expansion_power_acquire()/release()` pair still manages one application reference. The last release restores the rail settings changed by the BSP.
+Dock, storage, and IMU use DC1SW only when their caller enables it. Storage and IMU do not select a baseboard pin or address. Use `candis_expansion_power_claim()/unclaim()` with an initially NULL handle for independent application references. The `candis_expansion_power_acquire()/release()` pair manages one application reference. The last release restores the rail settings changed by the BSP.
 
 ## RTC
 
@@ -89,11 +88,11 @@ Use `candis_rtc_arm_update_irq()` and `candis_rtc_disarm_update_irq()` to bracke
 
 ## Storage and motion
 
-The standard mount verifies the Dock descriptor before using GPIO39. Power DC1SW, release UART0 on GPIO58/59 and keep U6 high impedance on GPIO39. After checking the expansion load, an application can use `bsp_feature_enable(BSP_FEATURE_SD, true)` to establish DC1SW. The mount path defaults to `/sdcard` and is configurable via `CONFIG_BSP_SD_MOUNT_POINT`.
+The core component does not assign SDMMC pins or a card-detect GPIO. Pass an application-owned `candis_storage_config_t` to `candis_storage_configure()`. Set `use_dc1sw` only when the selected baseboard derives card power from DC1SW and the complete load is verified. The standard mount path defaults to `/sdcard` and is configurable via `CONFIG_BSP_SD_MOUNT_POINT`.
 
 Select the profile for the actual card-detect wiring. Use `candis_storage_mount_with_config()` with `read_only = true` for browsing on ESP-IDF 6.2 or later. ESP-IDF 6.1 returns `ESP_ERR_NOT_SUPPORTED` for that request. Mounting leaves automatic formatting disabled. The storage owner polls `candis_storage_check_card()` and handles I/O failures. Once removal is observed, the mount reports `ESP_ERR_NOT_FOUND` through reinsertion until the application closes files and unmounts. Independent card detection uses `candis_storage_detect_read()` with application-side debounce.
 
-Enable `CONFIG_CANDIS_IMU` to sample acceleration and angular velocity. Use `candis_imu_get_state()` to check the hardware or active session. Use `candis_imu_start_with_config()` to set the rate and ranges, or `candis_imu_suspend()/resume()` to switch advanced power saving while retaining DC1SW. The first sample can return `ESP_ERR_NOT_FINISHED`. The 24-bit counter uses 39.0625 µs ticks. Use `candis_imu_read_temperature()` for die temperature.
+Enable `CONFIG_CANDIS_IMU` to sample acceleration and angular velocity. Pass a powered, caller-owned bus and the application-selected BMI270 address to `candis_imu_start_with_config()`. Use `candis_imu_probe()` before starting when the address is optional. `candis_imu_suspend()/resume()` retain the caller's bus while switching advanced power saving. The first sample can return `ESP_ERR_NOT_FINISHED`. The 24-bit counter uses 39.0625 µs ticks. Use `candis_imu_read_temperature()` for die temperature.
 
 ## Audio
 
@@ -105,9 +104,10 @@ The Candis PCM API supports 48 kHz signed stereo with one RX task and one TX tas
 
 - Enable `CONFIG_CANDIS_USB_DEVICE` for native USB CDC. The application uses nonblocking reads and writes and owns its own stdio routing.
 - Enable `CONFIG_CANDIS_USB_HOST` to use the ESP USB Host client APIs. Stop Device CDC before starting Host. Use `BSP_USB_HOST_POWER_MODE_AUTO` and pass `false` for the programmable current limit. Type-C electronics manage VBUS independently. After clients deregister, `bsp_usb_host_stop()` stops the USB data stack and releases the PHY.
-- With a fitted M1 motor and verified USB input, call `candis_motor_pulse()` for 1–600 ms of PWM on GPIO5. The BSP may enable BLDO2 at 2700 mV and restores its previous setting at release. Query `candis_motor_get_state()` or call `candis_motor_stop()` to cancel or retry cleanup.
+- Supply the motor GPIO, LEDC mode/channel/timer, carrier frequency, minimum and maximum PWM duty for the calibrated amplitude range, and optional expansion LDO in `candis_motor_config_t`, then call `candis_motor_init()`. `candis_motor_start_amplitude()` starts continuous vibration. `candis_motor_set_amplitude()` and `candis_motor_set_frequency()` can update an active output. Amplitude zero stops the output. Use `candis_motor_amplitude_to_duty()` or `candis_motor_duty_to_amplitude()` to inspect the configured mapping.
+- `candis_motor_pulse()` and `candis_motor_pulse_amplitude()` produce bounded 1–600 ms pulses and restore a rail changed by the request. Query `candis_motor_get_state()` for the applied duty, amplitude, frequency and cleanup state, or call `candis_motor_stop()` to stop continuous output, cancel a pulse, or retry cleanup.
 
 ## Expansion and camera
 
-- Release UART0 and confirm DC1SW before calling `candis_baseboard_probe()`. Use the returned identity with the [Dock](../../components/candis-dock/README.md) API. See [current BSP support](expansion.md#bsp-support) for descriptor compatibility.
+- Create and power the application-selected expansion bus, then call `candis_baseboard_probe_on_bus()` or `candis_baseboard_probe_state_on_bus()`. The [Dock component](../../components/candis-dock/README.md) supplies its GPIO58/59 bus, address `0x50`, and known revision rules. See [current BSP support](expansion.md#bsp-support) for descriptor compatibility.
 - The [camera API](../../components/candis-camera/README.md) takes application-defined pins, SCCB and XCLK settings, and resource callbacks. Select an Espressif DVP sensor and mode at build time. Copy a still frame into application memory or borrow and release DMA frames for streaming.

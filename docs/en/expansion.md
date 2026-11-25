@@ -2,7 +2,7 @@
 
 [Documentation](README.md) · [简体中文](../zh/expansion.md)
 
-The 30-pin CN1 and 50-pin CN2 on Candis mate with one Dock baseboard at a time. The BSP recognizes Dock rev. 1.1/1.2 as `CANDIS_BASEBOARD_BB` (EEPROM product ID 2). The EEPROM V1 layout is unchanged, and valid product identities outside the supported Dock revisions return `ESP_ERR_NOT_SUPPORTED`. Module discovery is limited to approved Dock profiles.
+The 30-pin CN1 and 50-pin CN2 on Candis mate with one baseboard at a time. The core `candis` component provides descriptor decoding and bus probe helpers without assigning the baseboard bus, address, or devices. The `candis-dock` component owns the known Dock wiring and recognizes rev. 1.1/1.2 as `CANDIS_BASEBOARD_BB` (EEPROM product ID 2). Applications own other baseboard profiles, child-module identification, and driver binding.
 
 ```text
 Candis core board
@@ -130,40 +130,31 @@ Two devices at one address may both acknowledge and return data that appears val
 
 ## Cold-start discovery
 
-1. **Start the core board.** Keep dedicated expansion lines high impedance and defer conflicting functions. Enable discovery only for a known assembly and verified supply conditions. DC1SW powers TF, IMU, U10, and attached modules together. Their power-on defaults and combined load must be safe. Otherwise keep the core board active and report why probing is unavailable.
-2. **Acquire expansion I²C.** Keep main I²C0 on GPIO6/7. Route I²C1 over the GPIO matrix to GPIO58 SCL and GPIO59 SDA, the native UART0 pins. Release UART0 and external drivers before claiming both open-drain lines. Keep a verified download path such as native USB OTG. Exclude concurrent access by other drivers or the programming fixture. Confirm DC1SW and its upstream supply are stable and SDA/SCL idle high before reading at 100 kHz.
-3. **Discover the parent.** Read 134 bytes at offset `0x00` from `0x50`. Allow at most three attempts per address, with at least 5 ms between attempts recommended. Use a 30 ms probe timeout and a 40 ms combined read timeout. Require two consecutive identical reads before [V1 validation](eeprom-v1.md#validation-and-compatibility). Record stable NACK as no response and changing data or mixed ACK/NACK/timeouts as unstable. Stop probing on a stuck-low line or bus-level error.
-4. **Discover slots on an approved Dock.** After validating its exact revision and assembly profile, read `0x51` and then `0x52` under the same rules. Keep module drivers off until both slots have been assessed together. Only registered addresses are scanned. Unidentified assemblies and the direct BB profile have no slot scan.
-5. **Reserve resources and bind.** Review the topology against the active core functions. Record location, I²C controller and address, decoded identity, serial number, status, and generation. Bind handles to the generation. Reserve all resources before the configured power and reset sequence. Roll back resources acquired by a failed bind and keep core functions running.
+The application decides when to probe the Dock and which drivers to start.
 
-| Discovery result | Default action |
-| --- | --- |
-| Probing disabled, DC1SW unstable, or UART0 still in use | Use the core board and report the condition |
-| No response at `0x50` | Use the core board. Absence, missing EEPROM, power loss, or an open connection can all cause NACK |
-| ACK with all `FF` or all `00` | Report a blank descriptor and leave the position unbound |
-| Short read, invalid CRC or format, or changing data | Report the address and error and leave the position unbound |
-| Unknown vendor, product, version, revision or variant, wrong position, or duplicate serial | Report the identity without binding the affected instances. Check nonzero serials within the same vendor and product |
-| Slot absent or incompatible | Leave the slot unbound. Use other functions only when the approved assembly shows that its attached load will not interfere |
-| Collision, stuck-low bus, or unexpected load | Stop activity on the affected domain, release the manager's resources safely, and cold boot after correcting the issue |
+1. **Prepare the expansion bus.** Confirm the actual assembly and combined load, power DC1SW, and release UART0 and any external drivers from GPIO58/59. Keep other bus users out of the probe interval.
+2. **Read the parent descriptor.** Call `candis_baseboard_probe_on_bus()` with the application-selected address, or use `candis_dock_probe()` for the known Dock at `0x50`. The helper reads one 134-byte image from offset `0x00`. The probe timeout is 30 ms and the combined read timeout is 40 ms.
+3. **Probe Dock slot addresses.** Pass the verified identity to `candis_dock_probe_modules()`. The result reports ACK responses at `0x51` and `0x52`. Module descriptor parsing, collision diagnosis, and driver binding are application responsibilities.
+4. **Validate and start application devices.** Applications must check module identity and the approved electrical profile before enabling a driver. Keep devices inactive when their identity, supply, shared pins, or bus behavior is uncertain.
 
-When discovery ends, remove temporary I²C handles before releasing probe pins and power. For a known baseboard without EEPROM, an operator may select a fixed assembly profile after checking the actual board and supply. The automatic path remains in core-only mode on no response. A single NACK cannot establish that U6 is empty for TF card detection.
+Both probe APIs attempt to release temporary I²C handles and power references before returning. A cleanup failure can leave resources pending for the next probe call. Verify U6's physical connection to GPIO39 before enabling TF card detect.
 
 ## Resource allocation
 
-Match the core and parent revisions, slot, and [product key](eeprom-v1.md#ids-and-hardware-revisions) to an approved profile. Record each function's pin direction, reset state, pull-ups, sharing rules, voltage domain, controller and address, supply dependencies, current, and shutdown order. The driver registry provides initialization and release operations. Apply optional EEPROM parameters only after binding the corresponding driver.
+For application-managed modules, match the core and parent revisions, slot, and [product key](eeprom-v1.md#ids-and-hardware-revisions) to an approved profile. Record each function's pin direction, reset state, pull-ups, sharing rules, voltage domain, controller and address, supply dependencies, current, and shutdown order. Apply optional EEPROM parameters only after binding the corresponding driver.
 
 | Resource | Allocation and conflicts |
 | --- | --- |
-| GPIO and pin multiplexing | GPIO35 is shared across slots. GPIO39 is also connected to card detect. GPIO37 is shared with the core LED. Outputs and alternate functions are exclusive by default. Shared inputs require compatible domains, pulls, and semantics, with no conflicting output. Reserve core, reset, boot, recovery, and fixed board functions first. Confirm the GPIO33/34 USB Serial/JTAG and GPIO54–57 external JTAG assignments before reuse. VBAT, PWRON, NTC, VSYS, 5V, differential speaker outputs, and CHIP_PU are fixed signals |
+| GPIO and pin multiplexing | The rules below describe the current Dock mapping. Core `candis` leaves these assignments to the application or baseboard component. On this Dock, GPIO35 is shared across slots, GPIO39 is connected to card detect, and GPIO37 is shared with the core LED. Outputs and alternate functions are exclusive by default. Shared inputs require compatible domains, pulls, and semantics, with no conflicting output. Reserve core, reset, boot, recovery, and fixed board functions first |
 | ADC | Reserve the verified GPIO, ADC unit, channel, and input mode. Record attenuation, range, and calibration. Keep the ADC pin free of digital outputs and other conflicting modes |
-| I²C | Share the verified controller and pins. Reserve each (bus, 7-bit address) for one device. Expansion addresses `0x50..0x52` are reserved for descriptors. Check addresses, voltage, open-drain operation, parallel pull-ups, and capacitance for all powered devices. BMI270 `0x68` is on main I²C |
+| I²C | Share the verified controller and pins. Reserve each (bus, 7-bit address) for one device. On the current Dock, addresses `0x50..0x52` are reserved for descriptors and BMI270 `0x68` is on main I²C. Check addresses, voltage, open-drain operation, parallel pull-ups, and capacitance for all powered devices |
 | SPI | Reserve an exclusive controller or approved shared clock/data lines with individual CS and agreed clock limits. Unselected devices release the return line. Reserve the core flash, PSRAM, and display resources first. Generic Dock SPI pin assignments are unregistered |
 | UART | Reserve the controller, TX/RX, and any direction control. Verify the attached endpoint. I²C1 and UART0 on GPIO58/59 are mutually exclusive. Check power and line state before returning them to UART0. Generic Dock UART pin assignments are unregistered |
 | Power | Reference-count common rails and lock their approved configuration. Use the TG28-ESP v1.0 table 6-3 **300 mA** DC1SW rating (default off) to budget U10, TF, IMU, and both slots, including steady state, inrush, and margin. Verify limits and voltage compatibility for other rails. Each holder releases only its own reference |
 
 | Profile | Fixed uses and constraints |
 | --- | --- |
-| Core board | TG28, RTC, touch, and audio use I²C0. Reserve core display, storage, and download resources. Use core-only operation without an available baseboard |
+| Core board | TG28, RTC, touch, and audio use I²C0. Reserve core display, USB, and download resources. Core-only operation does not select any baseboard peripheral |
 | `candis_bb` | Reserved direct baseboard without slots. Identity uses `0x50`. Register its remaining resources from its own schematic and BOM |
 | `candis-dock` rev. 1.2 | SDMMC uses the same pins and GPIO39 CD. BMI270 connects to I²C0 through Q2. CN3 carries the right differential speaker output. Rev. 1.1 carries the left output. Use only validated slot pin assignments and sharing arrangements |
 | Reference joystick | LEFT U6.20/GPIO42 and U6.18/GPIO43 are X/Y, U6.6/GPIO36 is the press input. U6.11/DC1SW and GND supply the module. U6.17/15 are SCL/SDA. The only I²C device is EEPROM `0x51`. Verify ADC range and mode, pulls, and assembly keying |
@@ -183,6 +174,6 @@ Hot-plug support requires a hardware revision with per-slot detection, controlle
 
 ## BSP support
 
-- `candis_baseboard_probe()` explicitly checks the deployed `ESP` descriptor at `0x50` for supported Dock revisions. `candis_baseboard_probe_state()` and `candis_dock_get_state()` distinguish an identified but unopened Dock from an active component session. The application decides when to probe and which driver to start.
-- `candis_dock_probe_modules()` reports address responses on `0x51` and `0x52`. The `CND` reader, child descriptor validation, and topology-wide resource allocation described here require host integration before use.
+- `candis_baseboard_probe_on_bus()` decodes a descriptor on the bus and address supplied by the caller. `candis_baseboard_probe_state_on_bus()` returns the capability state. `candis_dock_probe()` and `candis_dock_get_state()` apply the known Dock address and revision rules. The application decides when to probe and which driver to start.
+- `candis_dock_probe_modules()` reports ACK responses on `0x51` and `0x52`. Applications own child descriptor validation and topology-wide resource allocation.
 - Before deploying an assembly, verify connector orientation and continuity, matched revisions, address straps and WP, rail timing and combined load, and cold-start handling of blank or incompatible descriptors. Qualify the intended module combinations, shared pins, and resource release on the assembled board.

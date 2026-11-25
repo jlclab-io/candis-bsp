@@ -19,7 +19,7 @@
 
 ## 快速开始
 
-**准备 ESP-IDF。** 使用 [ESP-IDF 6.2](https://github.com/espressif/esp-idf/commit/2b10d1278a547f5dc92efbe516144b4ae85f80cb)。在 ESP-IDF 目录运行 `./install.sh esp32s31` 和 `source ./export.sh`。
+**准备 ESP-IDF。** 首选 [ESP-IDF 6.2](https://github.com/espressif/esp-idf/commit/2b10d1278a547f5dc92efbe516144b4ae85f80cb)，同时兼容 ESP-IDF 6.1。在 ESP-IDF 目录运行 `./install.sh esp32s31` 和 `source ./export.sh`。
 
 **构建显示示例。** 使用此 SDK 修订时，ESP32-S31 需要 `--preview`。
 
@@ -65,7 +65,8 @@ dependencies:
 - [**最小应用**](examples/candis_minimal)演示 I²C 首次初始化、共享引用、释放失败和恢复。
 - [**显示**](examples/display)启动 AMOLED 与 LVGL 触控界面。
 - [**录音机**](examples/audio/README.md)和[**音乐播放器**](examples/music_player/README.md)演示双声道录音和播放。
-- [**摄像头**](examples/camera)使用 OV5640 模块预览和采集图像。
+- [**摄像头**](examples/camera)按 DVP 型号配置采集或 AMOLED 预览，覆盖 17 种 Espressif 传感器配置。
+- [**Wi-Fi 与 BLE 共存**](examples/bleprph_wifi_coex/README.md)组合无线网络扫描、HTTP 访问和 BLE GATT 服务端。
 - [**Dock**](examples/dock/README.md)和[**扩展板**](examples/expansion)演示 TF 卡访问和模块探测。
 
 [查看全部示例 →](docs/zh/examples.md)
@@ -74,7 +75,7 @@ dependencies:
 
 - [`candis`](components/candis/README.md) 提供核心板的显示、触控、RTC、电源和外设接口。
 - [`tg28-esp`](components/tg28-esp/README.md) 是独立的 TG28-ESP 电源管理驱动。
-- [`candis-camera`](components/candis-camera/README.md) 提供可配置的 OV5640 DVP 采集。
+- [`candis-camera`](components/candis-camera/README.md) 提供可配置的 8-bit DVP 采集，覆盖 17 种 Espressif 传感器配置。
 - [`candis-dock`](components/candis-dock/README.md) 提供 Dock 识别、TF 卡访问与扬声器声道选择。
 
 BSP 处于开发预览阶段。硬件支持范围见[组件支持](docs/zh/component-coverage.md)。

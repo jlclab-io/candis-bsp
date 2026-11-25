@@ -40,11 +40,11 @@ RGB565, YUV422, and grayscale modes can preview on the 480 × 480 AMOLED. RAW an
 | Fragment | Use |
 | --- | --- |
 | `sdkconfig.dvp_all` | Compile all 17 official DVP drivers for build verification |
-| `sdkconfig.fixture` | Select the OV5640 validation fixture's wiring and supplies |
+| `sdkconfig.fixture` | Select the reference OV5640 assembly's wiring and supplies |
 | `sdkconfig.still` | Display a single captured frame |
-| `sdkconfig.jpeg` | Save a still to the validation fixture's FAT-formatted TF card |
-| `sdkconfig.uyvy` / `sdkconfig.yuyv` | Select the fixture's UYVY software conversion or YUYV DVP conversion path |
+| `sdkconfig.jpeg` | Save a still to the reference assembly's FAT-formatted TF card |
+| `sdkconfig.uyvy` / `sdkconfig.yuyv` | Select the reference assembly's UYVY software conversion or YUYV DVP conversion path |
 
-On the validation fixture, disable `CONFIG_CANDIS_CAMERA_FIXTURE_PWDN_GPIO` for a module that holds PWDN low in hardware.
+For the reference assembly, disable `CONFIG_CANDIS_CAMERA_FIXTURE_PWDN_GPIO` for a module that holds PWDN low in hardware.
 
 [Apache-2.0](LICENSE)

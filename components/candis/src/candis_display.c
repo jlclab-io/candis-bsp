@@ -512,32 +512,40 @@ static esp_err_t create_touch(i2c_master_bus_handle_t bus, esp_lcd_touch_interru
     return esp_lcd_touch_new_i2c_cst9220(*handle, &config, touch);
 }
 
-static esp_err_t release_touch(esp_lcd_touch_handle_t *touch, esp_lcd_panel_io_handle_t *io)
+static esp_err_t release_touch(esp_lcd_touch_handle_t *touch, esp_lcd_panel_io_handle_t *io,
+                               esp_err_t (*driver_delete)(esp_lcd_touch_handle_t))
 {
+    esp_err_t touch_err = ESP_OK;
     if (*touch) {
-        ESP_RETURN_ON_ERROR(esp_lcd_touch_del(*touch), TAG, "release touch");
+        if ((*touch)->config.interrupt_callback) {
+            ESP_RETURN_ON_ERROR(gpio_isr_handler_remove((*touch)->config.int_gpio_num),
+                                TAG, "remove touch interrupt handler");
+            (*touch)->config.interrupt_callback = NULL;
+        }
+        /* With the ISR detached, CST9220 consumes the handle even on GPIO reset errors. */
+        touch_err = driver_delete ? driver_delete(*touch) : esp_lcd_touch_del(*touch);
         *touch = NULL;
     }
+    esp_err_t io_err = ESP_OK;
     if (*io) {
-        ESP_RETURN_ON_ERROR(esp_lcd_panel_io_del(*io), TAG, "release touch IO");
-        *io = NULL;
+        io_err = esp_lcd_panel_io_del(*io);
+        if (io_err == ESP_OK) {
+            *io = NULL;
+        }
     }
-    return ESP_OK;
+    return touch_err == ESP_OK ? io_err : touch_err;
 }
 
 static esp_err_t release_standalone_touch(void)
 {
-    esp_err_t err = ESP_OK;
-    if (s_standalone_touch.touch && s_standalone_touch.driver_delete) {
-        /* Without an interrupt callback CST9220 frees its handle even if GPIO
-         * reset reports an error. All remaining cleanup is owned by the BSP. */
-        err = s_standalone_touch.driver_delete(s_standalone_touch.touch);
-        s_standalone_touch.touch = NULL;
-        s_standalone_touch.driver_delete = NULL;
+    const esp_err_t touch_err = release_touch(&s_standalone_touch.touch, &s_standalone_touch.io,
+                                              s_standalone_touch.driver_delete);
+    if (s_standalone_touch.touch || s_standalone_touch.io) {
+        return touch_err;
     }
-    ESP_RETURN_ON_ERROR(release_touch(&s_standalone_touch.touch, &s_standalone_touch.io), TAG, "release standalone touch IO");
+    s_standalone_touch.driver_delete = NULL;
     const esp_err_t power = candis_power_release(&s_standalone_touch.power);
-    return err == ESP_OK ? power : err;
+    return touch_err == ESP_OK ? power : touch_err;
 }
 
 esp_err_t candis_touch_new_with_config(const candis_touch_config_t *config, esp_lcd_touch_handle_t *ret_touch)
@@ -801,7 +809,7 @@ static esp_err_t release_display(void)
     }
     esp_err_t sleep = ESP_OK;
 #if !BSP_CONFIG_NO_GRAPHIC_LIB
-    ESP_RETURN_ON_ERROR(release_touch(&s_display.touch, &s_display.touch_io), TAG, "release display touch");
+    ESP_RETURN_ON_ERROR(release_touch(&s_display.touch, &s_display.touch_io, NULL), TAG, "release display touch");
 #endif
     if (s_display.panel_awake && (!s_display.sleeping || s_display.sleep_pending)) {
         sleep = panel_command(LCD_CMD_DISPOFF, NULL, 0);

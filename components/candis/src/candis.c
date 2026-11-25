@@ -68,6 +68,7 @@ esp_err_t candis_i2c_acquire(i2c_master_bus_handle_t *bus)
     esp_err_t err = candis_i2c_acquire_locked(bus);
     if (err == ESP_OK) {
         ++s_external_users;
+        candis_power_init_default_charge_locked();
     }
     candis_control_leave();
     return err;
@@ -97,6 +98,9 @@ esp_err_t bsp_i2c_init(void)
         return ESP_ERR_INVALID_STATE;
     }
     esp_err_t err = bsp_i2c_init_locked();
+    if (err == ESP_OK) {
+        candis_power_init_default_charge_locked();
+    }
     candis_control_leave();
     return err;
 }
@@ -107,6 +111,9 @@ i2c_master_bus_handle_t bsp_i2c_get_handle(void)
         return NULL;
     }
     i2c_master_bus_handle_t bus = bsp_i2c_init_locked() == ESP_OK ? s_bsp_bus : NULL;
+    if (bus) {
+        candis_power_init_default_charge_locked();
+    }
     candis_control_leave();
     return bus;
 }

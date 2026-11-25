@@ -7,6 +7,8 @@
 #include <string.h>
 #include <unistd.h>
 #include "bsp/candis_storage.h"
+#include "driver/gpio.h"
+#include "driver/sdmmc_host.h"
 #include "camera_pixels.h"
 #include "driver/jpeg_encode.h"
 #include "esp_check.h"
@@ -125,8 +127,24 @@ esp_err_t camera_save_still_jpeg(const struct v4l2_pix_format *format, uint8_t *
             err = ESP_ERR_INVALID_RESPONSE;
         }
         if (err == ESP_OK) {
+            candis_storage_config_t storage = CANDIS_STORAGE_CONFIG_DEFAULT();
+            storage.slot.clk = GPIO_NUM_24;
+            storage.slot.cmd = GPIO_NUM_25;
+            storage.slot.d0 = GPIO_NUM_20;
+            storage.slot.d1 = GPIO_NUM_21;
+            storage.slot.d2 = GPIO_NUM_22;
+            storage.slot.d3 = GPIO_NUM_23;
+            storage.slot.cd = GPIO_NUM_35;
+            storage.slot.wp = SDMMC_SLOT_NO_WP;
+            storage.slot.width = 4;
+            storage.slot.flags |= SDMMC_SLOT_FLAG_INTERNAL_PULLUP;
+            storage.card_detect_active_low = true;
+            storage.use_dc1sw = true;
             sdmmc_card_t *card;
-            err = candis_storage_mount(MOUNT_PATH, CANDIS_STORAGE_FIXTURE, true, &card);
+            err = candis_storage_configure(&storage);
+            if (err == ESP_OK) {
+                err = candis_storage_mount(MOUNT_PATH, true, &card);
+            }
             if (err == ESP_OK) {
                 err = write_photo(jpeg, length);
             }
@@ -135,6 +153,7 @@ esp_err_t camera_save_still_jpeg(const struct v4l2_pix_format *format, uint8_t *
             if (err == ESP_OK) {
                 err = unmounted;
             }
+            candis_storage_reset_config();
         }
     }
     free(jpeg);

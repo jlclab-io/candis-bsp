@@ -59,6 +59,8 @@ static esp_err_t sample(const tg28_esp_t *pmu)
     ESP_LOGI(TAG, "vbus=%u cell_present=%u system_on=%u phase=%d CC_setpoint=%u mA CV_setpoint=%u mV irq=%06" PRIx32,
              status.vbus_good, status.battery_present, status.system_on, status.charge_state,
              charger.current_ma, charger.voltage_mv, events);
+    ESP_LOGI(TAG, "charger_enabled=%u battery_detection=%u batfet_open=%u battery_direction=%d adc_mask=0x%02x",
+             charger.enabled, charger.detection_enabled, status.batfet_open, status.direction, adc);
 
     if (status.battery_present) {
         uint8_t soc;
@@ -71,15 +73,22 @@ static esp_err_t sample(const tg28_esp_t *pmu)
         }
     }
     for (uint8_t channel = TG28_ESP_ADC_VBAT; channel <= TG28_ESP_ADC_DIE; channel <<= 1) {
-        if (adc & channel) {
-            uint32_t uv;
-            const esp_err_t err = tg28_esp_read_adc_uv(pmu, channel, &uv);
-            if (channel == TG28_ESP_ADC_TS && err == ESP_ERR_INVALID_RESPONSE) {
-                ESP_LOGW(TAG, "TS ADC overflow");
-            } else {
-                ESP_RETURN_ON_ERROR(err, TAG, "ADC data");
-                ESP_LOGI(TAG, "ADC channel=0x%02x input=%" PRIu32 " uV", channel, uv);
-            }
+        if (!(adc & channel)) {
+            continue;
+        }
+        if (channel == TG28_ESP_ADC_VBAT && !status.battery_present) {
+            uint16_t raw;
+            ESP_RETURN_ON_ERROR(tg28_esp_read_adc_raw(pmu, channel, &raw), TAG, "VBAT ADC");
+            ESP_LOGI(TAG, "VBAT ADC raw=0x%04x (battery absent)", raw);
+            continue;
+        }
+        uint32_t uv;
+        const esp_err_t err = tg28_esp_read_adc_uv(pmu, channel, &uv);
+        if (channel == TG28_ESP_ADC_TS && err == ESP_ERR_INVALID_RESPONSE) {
+            ESP_LOGW(TAG, "TS ADC overflow");
+        } else {
+            ESP_RETURN_ON_ERROR(err, TAG, "ADC data");
+            ESP_LOGI(TAG, "ADC channel=0x%02x input=%" PRIu32 " uV", channel, uv);
         }
     }
     return ESP_OK;

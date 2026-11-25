@@ -8,7 +8,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from tools.ci_matrix import (
+    ALL_DEFAULT_IDS,
     BUILDS_BY_GROUP,
+    CORE_SMOKE_IDS,
     CONFIG_FRAGMENTS,
     builds_for_project,
     groups_for_builds,
@@ -103,6 +105,24 @@ class CiMatrixTest(unittest.TestCase):
         self.assertEqual(plan_paths(tg28_consumer), ["tg28:default"])
         self.assertTrue(paths_need_host_tests(tg28_consumer))
 
+    def test_shared_sources_select_all_profiles_for_the_project(self):
+        for project in ("adc", "motion", "tf_card", "expansion"):
+            with self.subTest(project=project):
+                self.assertEqual(
+                    plan_paths([f"examples/{project}/main/main.c"]),
+                    builds_for_project(project),
+                )
+
+    def test_core_component_changes_cover_default_applications(self):
+        self.assertEqual(
+            plan_paths(["components/candis/src/candis.c"]),
+            ALL_DEFAULT_IDS,
+        )
+        self.assertEqual(
+            plan_paths(["components/tg28-esp/src/tg28_esp.c"]),
+            ALL_DEFAULT_IDS,
+        )
+
     def test_documentation_changes_use_the_lightweight_check(self):
         readme = ["components/candis/README.md"]
         self.assertEqual(plan_paths(readme), [])
@@ -112,6 +132,13 @@ class CiMatrixTest(unittest.TestCase):
         checker = ["tools/check_markdown_links.py"]
         self.assertTrue(paths_need_host_tests(checker))
         self.assertTrue(paths_need_docs_check(checker))
+
+    def test_workflow_changes_select_minimum_build_coverage(self):
+        self.assertEqual(plan_paths([".github/workflows/full-build.yml"]), CORE_SMOKE_IDS)
+        self.assertEqual(
+            plan_paths([".github/workflows/registry-release.yml"]),
+            [*CORE_SMOKE_IDS, "dock:default"],
+        )
 
 
 if __name__ == "__main__":

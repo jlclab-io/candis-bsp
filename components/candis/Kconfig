@@ -13,12 +13,18 @@ config CANDIS_AUDIO
     select CODEC_ES8389_SUPPORT
 
 config CANDIS_IMU
-    bool "Build the Candis expansion BMI270 interface"
+    bool "Build the configurable BMI270 interface"
     default n
+    help
+        Build the BMI270 driver. The application supplies the powered I2C bus,
+        device address, output data rate, and measurement ranges at runtime.
 
 config BSP_SD_MOUNT_POINT
     string "Default BSP TF mount point"
     default "/sdcard"
+    help
+        Mount path used by bsp_sdcard_mount(). Configure the SDMMC transport
+        through candis_storage_configure() before mounting.
 
 config CANDIS_USB_DEVICE
     bool "Build native OTG CDC device support"

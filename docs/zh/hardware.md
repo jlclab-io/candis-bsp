@@ -20,19 +20,18 @@
 
 - **显示时序。** BSP 默认采用 80 MHz QSPI。应用若需以 50 MHz 运行，可在 `candis_display_config_t` 中设置 `bench_qspi_80mhz = false`。按实际工况验证所用频率。
 - **音频。** 使用音频示例前接好麦克风和扬声器，并为 ALDO2 供电。Dock 的 PCM 声道按[扬声器接线](../../components/candis-dock/README.md#hardware)选择。
-- **扩展。** TF 卡、底板 EEPROM、BMI270 和已接入的 Dock 模块共用 DC1SW。启用电源管理前，核对整个供电域的负载与时序。插拔底板或模块前断开全部电源。
+- **扩展。** BTB 引出 TG28 电源轨、GPIO、I²C、USB 相关引脚、音频信号和电源。核心 BSP 不预设底板器件或 GPIO。当前 Dock 上，TF 卡、底板 EEPROM、BMI270 和已接入模块共用 DC1SW；启用电源管理前仍须核对整个供电域的负载与时序。
 - **USB Host。** USB-C 电路控制接口 VBUS 和限流。停止 Host 会释放数据栈与 PHY。使用 Host 前核对供电方式与外设负载。
 
 ## 扩展接口
 
-| 资源 | 分配 |
+`candis` 组件只固定上面的核心板资源。底板器件型号、地址、存储引脚、马达 PWM 和可选 I²C 控制器由应用或独立底板组件提供。
+
+| 装配 | 配置归属 |
 | --- | --- |
-| 扩展 I²C | I²C1，SCL GPIO58，SDA GPIO59。探测前释放两脚的 UART0 及外部驱动 |
-| 底板 EEPROM | 扩展 I²C 上的 `0x50`，需 DC1SW 上电。当前支持见[扩展硬件](expansion.md#bsp-支持) |
-| TF 卡 | 四位 SDMMC，D0–D3 GPIO20–23，CLK GPIO24，CMD GPIO25。Dock 的卡检测为 GPIO39 |
-| 运动传感 | BMI270，主 I²C 地址 `0x68`，由 DC1SW 供电。INT1 接 GPIO38，BSP 使用轮询 |
-| M1 马达 | GPIO5 驱动高有效低边开关，BLDO2 供电。BSP 脉冲使用 2700 mV，需要确认马达装配和 USB 输入 |
-| OV5640 摄像头 | 测试板用 GPIO39 复位，GPIO40 可选控制 PWDN，GPIO46–57 用于 DVP 和 XCLK。按实物在[应用中配置接线和时序](../../components/candis-camera/README.md#application-wiring) |
-| Dock 摄像头接口 | GPIO46–57 提供 8 位 DVP，扩展 I²C GPIO58/59 提供 SCCB，并引出由 PMU 控制的 BLDO1、DC1SW、ALDO3、ALDO4 电源。见 [U7 接口引脚表](expansion.md#dock-20pin) |
+| 核心 BSP | 不预设底板 SDMMC、卡检测、IMU 地址、马达 GPIO 或扩展 I²C 控制器 |
+| Candis Dock v1.1/1.2 | `candis-dock` 固定 GPIO58/59 上的 I²C1、描述符 `0x50`、GPIO20–25 的 TF 数据与 GPIO39 卡检测、已验证的 Dock 扬声器路由和硬件修订规则 |
+| 应用自有外设 | 存储、运动传感、马达和摄像头示例展示如何传入应用自有引脚与器件，实际使用时应按装配修改配置。见 [TF 卡](../../examples/tf_card)、[运动传感](../../examples/motion)、[马达](../../examples/motor) 和 [摄像头](../../examples/camera) |
+| Dock 摄像头接口 | 当前 Dock 用 GPIO46–57 提供 8 位 DVP，GPIO58/59 提供 SCCB，并引出 PMU 控制的 BLDO1、DC1SW、ALDO3、ALDO4。摄像头示例通过资源适配器传入这组接线。见 [U7 接口引脚表](expansion.md#dock-20pin) |
 
 见[扩展硬件](expansion.md)获取 BTB 和 Dock 连接器引脚定义。

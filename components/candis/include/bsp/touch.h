@@ -27,7 +27,9 @@ typedef struct {
 
 /** Open CST9220 independently of LVGL using the existing display supply. */
 esp_err_t bsp_touch_new(const bsp_touch_config_t *config, esp_lcd_touch_handle_t *ret_touch);
-/** Release the touch handle, its IO and its display rail. */
+/** Release the touch handle, its IO and its display rail.
+ * On failure, call bsp_touch_del(NULL) to finish pending cleanup.
+ */
 esp_err_t bsp_touch_del(esp_lcd_touch_handle_t touch);
 /** Create CST9220 with explicit Candis axis and mirror mapping. */
 esp_err_t candis_touch_new_with_config(const candis_touch_config_t *config,

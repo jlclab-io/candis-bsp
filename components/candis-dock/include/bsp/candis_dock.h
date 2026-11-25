@@ -1,8 +1,10 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 #pragma once
 
+#include <stddef.h>
 #include "bsp/candis_baseboard.h"
 #include "bsp/candis_storage.h"
+#include "bsp/candis_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,6 +34,11 @@ esp_err_t candis_dock_open(bool manage_power, candis_baseboard_info_t *identity)
  * Retry close if release failed, including when open logged a rollback failure.
  */
 esp_err_t candis_dock_close(void);
+
+/** Read raw Dock descriptor bytes from EEPROM address 0x50 while the session is initialized.
+ * The component serializes access on its owned expansion bus. The destination is valid only on ESP_OK.
+ */
+esp_err_t candis_dock_read_eeprom(uint8_t *data, size_t length);
 
 /** Interleaved PCM slot connected to the Dock's CN3 speaker connector. */
 typedef enum {

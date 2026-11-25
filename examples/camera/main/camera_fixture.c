@@ -4,12 +4,29 @@
 #include "bsp/candis_baseboard.h"
 #include "bsp/candis_power.h"
 #include "camera_fixture.h"
+#include "driver/uart.h"
 #include "esp_check.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "sdkconfig.h"
 
 static const char *TAG = "candis_camera";
+
+static esp_err_t expansion_uart_released(void)
+{
+#if CONFIG_ESP_CONSOLE_UART_DEFAULT
+    return ESP_ERR_INVALID_STATE;
+#endif
+#if CONFIG_ESP_CONSOLE_UART_CUSTOM
+    if (CONFIG_ESP_CONSOLE_UART_TX_GPIO == GPIO_NUM_58 ||
+        CONFIG_ESP_CONSOLE_UART_TX_GPIO == GPIO_NUM_59 ||
+        CONFIG_ESP_CONSOLE_UART_RX_GPIO == GPIO_NUM_58 ||
+        CONFIG_ESP_CONSOLE_UART_RX_GPIO == GPIO_NUM_59) {
+        return ESP_ERR_INVALID_STATE;
+    }
+#endif
+    return uart_is_driver_installed(UART_NUM_0) ? ESP_ERR_INVALID_STATE : ESP_OK;
+}
 
 typedef struct {
     i2c_master_bus_handle_t bus;
@@ -50,7 +67,7 @@ static esp_err_t release_supplies(camera_resource_context_t *resources)
         candis_expansion_ldo_handle_t *handle = &resources->supplies[index - 1];
         if (*handle) {
             ESP_RETURN_ON_ERROR(candis_expansion_ldo_release(*handle), TAG, "release camera supply");
-            *handle = NULL;
+            *handle = CANDIS_EXPANSION_LDO_HANDLE_NONE;
         }
     }
     return ESP_OK;
@@ -63,7 +80,7 @@ static esp_err_t acquire_dock_resources(void *context, i2c_master_bus_handle_t *
         return ESP_ERR_INVALID_ARG;
     }
 
-    ESP_RETURN_ON_ERROR(candis_expansion_i2c_check(), TAG, "release UART0 before using expansion I2C");
+    ESP_RETURN_ON_ERROR(expansion_uart_released(), TAG, "release UART0 before using expansion I2C");
 #ifdef CONFIG_CANDIS_CAMERA_DOCK_V12_MANAGE_SUPPLIES
     ESP_RETURN_ON_ERROR(candis_expansion_power_claim(true, &resources->dc1sw), TAG,
                         "claim Dock DC1SW");

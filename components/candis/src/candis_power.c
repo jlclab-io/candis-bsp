@@ -17,6 +17,9 @@ static shared_rail_t s_expansion = {.power.rail = CANDIS_RAIL_EXPANSION};
 static shared_rail_t s_display = {.power.rail = CANDIS_RAIL_DISPLAY};
 static candis_power_t s_application_expansion = {.rail = CANDIS_RAIL_EXPANSION};
 static candis_power_t s_observer;
+static candis_power_t s_charge_setup;
+static bool s_default_charge_applied;
+static unsigned s_default_charge_init_attempts;
 
 struct candis_expansion_power_lease {
     candis_power_t power;
@@ -30,14 +33,16 @@ static const tg28_esp_ldo_t s_ldo[] = {
     [CANDIS_RAIL_BLDO2] = TG28_ESP_BLDO2,
 };
 
-static struct candis_expansion_ldo_lease {
+static struct expansion_ldo {
     candis_power_t power;
+    uintptr_t generation;
 } s_expansion_ldos[] = {
     [CANDIS_EXPANSION_ALDO3] = {.power.rail = CANDIS_RAIL_ALDO3},
     [CANDIS_EXPANSION_ALDO4] = {.power.rail = CANDIS_RAIL_ALDO4},
     [CANDIS_EXPANSION_BLDO1] = {.power.rail = CANDIS_RAIL_BLDO1},
     [CANDIS_EXPANSION_BLDO2] = {.power.rail = CANDIS_RAIL_BLDO2},
 };
+static uintptr_t s_last_ldo_generation;
 
 static uint8_t voltage_code(uint16_t millivolts)
 {
@@ -245,6 +250,16 @@ esp_err_t candis_expansion_power_unclaim(candis_expansion_power_handle_t *handle
     return err;
 }
 
+static struct expansion_ldo *find_ldo_lease(uintptr_t generation)
+{
+    for (size_t i = 0; i < sizeof(s_expansion_ldos) / sizeof(s_expansion_ldos[0]); ++i) {
+        if (s_expansion_ldos[i].generation == generation) {
+            return &s_expansion_ldos[i];
+        }
+    }
+    return NULL;
+}
+
 esp_err_t candis_expansion_ldo_acquire(candis_expansion_ldo_t rail, uint16_t voltage_mv, unsigned settle_ms,
                                       candis_expansion_ldo_handle_t *handle)
 {
@@ -259,38 +274,26 @@ esp_err_t candis_expansion_ldo_acquire(candis_expansion_ldo_t rail, uint16_t vol
     if (!candis_control_enter()) {
         return ESP_ERR_INVALID_STATE;
     }
-    if (*handle) {
-        bool known_handle = false;
-        for (size_t i = 0; i < sizeof(s_expansion_ldos) / sizeof(s_expansion_ldos[0]); ++i) {
-            if (*handle == &s_expansion_ldos[i]) {
-                if (s_expansion_ldos[i].power.bus) {
-                    candis_control_leave();
-                    return ESP_ERR_INVALID_STATE;
-                }
-                *handle = NULL;
-                known_handle = true;
-                break;
-            }
-        }
-        if (!known_handle) {
-            candis_control_leave();
-            return ESP_ERR_INVALID_STATE;
-        }
+    const uintptr_t previous = *handle;
+    if (previous && (previous > s_last_ldo_generation || find_ldo_lease(previous))) {
+        candis_control_leave();
+        return ESP_ERR_INVALID_STATE;
     }
-    *handle = NULL;
-    candis_power_t *power = &s_expansion_ldos[rail].power;
-    esp_err_t err = ESP_ERR_INVALID_STATE;
-    if (!power->bus) {
-        err = acquire_rail(power, true, settle_ms, voltage_code(voltage_mv));
-        if (err != ESP_OK) {
-            esp_err_t cleanup = candis_power_release(power);
-            if (cleanup != ESP_OK) {
-                ESP_LOGE(TAG, "Unable to roll back expansion LDO: %s", esp_err_to_name(cleanup));
-            }
-        }
-        if (power->bus) {
-            *handle = &s_expansion_ldos[rail];
-        }
+    *handle = CANDIS_EXPANSION_LDO_HANDLE_NONE;
+    struct expansion_ldo *lease = &s_expansion_ldos[rail];
+    if (lease->generation || s_last_ldo_generation == UINTPTR_MAX) {
+        const esp_err_t err = lease->generation ? ESP_ERR_INVALID_STATE : ESP_ERR_NO_MEM;
+        candis_control_leave();
+        return err;
+    }
+    const esp_err_t err = acquire_rail(&lease->power, true, settle_ms, voltage_code(voltage_mv));
+    if (err != ESP_OK) {
+        ESP_ERROR_CHECK_WITHOUT_ABORT(candis_power_release(&lease->power));
+    }
+    if (lease->power.bus) {
+        /* Include leases whose acquisition failed and still need cleanup. */
+        lease->generation = ++s_last_ldo_generation;
+        *handle = lease->generation;
     }
     candis_control_leave();
     return err;
@@ -304,7 +307,14 @@ esp_err_t candis_expansion_ldo_release(candis_expansion_ldo_handle_t handle)
     if (!candis_control_enter()) {
         return ESP_ERR_INVALID_STATE;
     }
-    esp_err_t err = candis_power_release(&handle->power);
+    struct expansion_ldo *lease = find_ldo_lease(handle);
+    esp_err_t err = ESP_ERR_INVALID_STATE;
+    if (lease) {
+        err = candis_power_release(&lease->power);
+        if (err == ESP_OK) {
+            lease->generation = CANDIS_EXPANSION_LDO_HANDLE_NONE;
+        }
+    }
     candis_control_leave();
     return err;
 }
@@ -363,10 +373,10 @@ esp_err_t candis_power_read_supply(candis_supply_state_t *state)
         err = tg28_esp_read_status(&s_observer.pmu, &status);
     }
     if (err == ESP_OK) {
-        err = tg28_esp_read_rail_enabled(&s_observer.pmu, TG28_ESP_RAIL_BLDO2, &result.motor_rail_on);
+        err = tg28_esp_read_rail_enabled(&s_observer.pmu, TG28_ESP_RAIL_BLDO2, &result.bldo2_on);
     }
     if (err == ESP_OK) {
-        err = tg28_esp_read_rail_voltage(&s_observer.pmu, TG28_ESP_RAIL_BLDO2, &result.motor_rail_mv);
+        err = tg28_esp_read_rail_voltage(&s_observer.pmu, TG28_ESP_RAIL_BLDO2, &result.bldo2_mv);
     }
     err = observe_finish(err);
     if (err == ESP_OK) {
@@ -401,5 +411,131 @@ esp_err_t candis_power_read_battery_uv(uint32_t *microvolts)
     if (err == ESP_OK) {
         *microvolts = value;
     }
+    return err;
+}
+
+static bool charge_profile_ready(const tg28_esp_status_t *status, const tg28_esp_charger_t *charger,
+                                 const tg28_esp_irq_t *irq)
+{
+    return status->vbus_good && status->battery_present && !status->thermal_regulation &&
+           !status->input_current_limit && !status->input_voltage_limit &&
+           status->charge_state != TG28_ESP_CHARGE_STATE_UNKNOWN && charger->enabled &&
+           charger->detection_enabled && charger->precharge_timer_enabled &&
+           charger->charge_timer_enabled && charger->voltage_mv == 4200 &&
+           !(irq->bank[0] & 0x0f) && !(irq->bank[2] & 0x07);
+}
+
+static esp_err_t ensure_default_charge_locked(void)
+{
+    const uint16_t fallback_ma = CANDIS_OTP_CHARGE_CURRENT_MA;
+    const uint16_t target_ma = CANDIS_DEFAULT_CHARGE_CURRENT_MA;
+
+    esp_err_t err = candis_power_release(&s_charge_setup);
+    if (err == ESP_OK) {
+        err = open_pmu(&s_charge_setup);
+    }
+    uint8_t chip_id = 0;
+    if (err == ESP_OK) {
+        err = tg28_esp_read_chip_id(&s_charge_setup.pmu, &chip_id);
+    }
+    if (err == ESP_OK && chip_id != TG28_ESP_CHIP_ID) {
+        err = ESP_ERR_INVALID_RESPONSE;
+    }
+
+    uint16_t current_ma = 0;
+    if (err == ESP_OK) {
+        unsigned valid_samples = 0;
+        esp_err_t sample_err = ESP_ERR_INVALID_RESPONSE;
+        for (unsigned attempt = 0; attempt < 5 && valid_samples < 3; ++attempt) {
+            tg28_esp_status_t status;
+            tg28_esp_charger_t charger;
+            tg28_esp_irq_t irq;
+            sample_err = tg28_esp_read_status(&s_charge_setup.pmu, &status);
+            if (sample_err == ESP_OK) {
+                sample_err = tg28_esp_read_charger(&s_charge_setup.pmu, &charger);
+            }
+            if (sample_err == ESP_OK) {
+                sample_err = tg28_esp_read_irq(&s_charge_setup.pmu, &irq);
+            }
+            if (sample_err == ESP_OK && !charge_profile_ready(&status, &charger, &irq)) {
+                sample_err = ESP_ERR_INVALID_STATE;
+            }
+            if (sample_err == ESP_OK && charger.current_ma != fallback_ma && charger.current_ma != target_ma) {
+                sample_err = ESP_ERR_INVALID_STATE;
+            }
+            if (sample_err != ESP_OK) {
+                valid_samples = 0;
+                if (sample_err == ESP_ERR_INVALID_STATE) {
+                    break;
+                }
+            } else {
+                if (charger.current_ma != current_ma) {
+                    valid_samples = 0;
+                }
+                current_ma = charger.current_ma;
+                ++valid_samples;
+            }
+            if (valid_samples < 3 && attempt < 4) {
+                vTaskDelay(pdMS_TO_TICKS(100));
+            }
+        }
+        if (valid_samples < 3) {
+            err = sample_err == ESP_OK ? ESP_ERR_INVALID_RESPONSE : sample_err;
+        }
+    }
+
+    if (err == ESP_OK && current_ma == fallback_ma) {
+        err = tg28_esp_set_charge_current(&s_charge_setup.pmu, target_ma);
+        uint16_t readback_ma = 0;
+        esp_err_t readback = err;
+        if (readback == ESP_OK) {
+            readback = tg28_esp_read_charge_current(&s_charge_setup.pmu, &readback_ma);
+        }
+        if (readback != ESP_OK || readback_ma != target_ma) {
+            esp_err_t restore = tg28_esp_set_charge_current(&s_charge_setup.pmu, fallback_ma);
+            uint16_t restored_ma = 0;
+            if (restore == ESP_OK) {
+                restore = tg28_esp_read_charge_current(&s_charge_setup.pmu, &restored_ma);
+                if (restore == ESP_OK && restored_ma != fallback_ma) {
+                    restore = ESP_ERR_INVALID_RESPONSE;
+                }
+            }
+            ESP_LOGE(TAG, "Set charge %u mA failed: %s, readback=%u mA, restore=%s, readback=%u mA",
+                     target_ma, esp_err_to_name(readback), readback_ma, esp_err_to_name(restore), restored_ma);
+            err = readback == ESP_OK ? ESP_ERR_INVALID_RESPONSE : readback;
+        } else {
+            ESP_LOGI(TAG, "Charge current %u -> %u mA, readback=%u mA", fallback_ma, target_ma, readback_ma);
+        }
+    } else if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Charge current already %u mA", current_ma);
+    }
+
+    const esp_err_t cleanup = candis_power_release(&s_charge_setup);
+    if (err == ESP_OK && cleanup == ESP_OK) {
+        s_default_charge_applied = true;
+    }
+    return err == ESP_OK ? cleanup : err;
+}
+
+void candis_power_init_default_charge_locked(void)
+{
+    if (s_default_charge_applied || s_default_charge_init_attempts >= 3) {
+        return;
+    }
+    ++s_default_charge_init_attempts;
+    const esp_err_t err = ensure_default_charge_locked();
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Default charge setup deferred: %s (%u/3)", esp_err_to_name(err),
+                 s_default_charge_init_attempts);
+    }
+}
+
+esp_err_t candis_power_ensure_default_charge(void)
+{
+    if (!candis_control_enter()) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    const esp_err_t err = ensure_default_charge_locked();
+    candis_control_leave();
     return err;
 }

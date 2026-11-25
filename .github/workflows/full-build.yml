@@ -2,6 +2,12 @@ name: ESP-IDF full build
 
 on:
   workflow_dispatch:
+    inputs:
+      idf_version:
+        description: ESP-IDF version
+        type: choice
+        options: ['6.2', '6.1']
+        default: '6.2'
   schedule:
     - cron: '17 3 * * 1'
 
@@ -9,11 +15,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: full-build-${{ github.ref }}
+  group: full-build-${{ github.ref }}-${{ inputs.idf_version || '6.2' }}
   cancel-in-progress: true
 
 env:
-  IDF_REVISION: 2b10d1278a547f5dc92efbe516144b4ae85f80cb
+  IDF_REVISION: ${{ inputs.idf_version == '6.1' && '051e4c4eb20346e043cdd47bc388fde75ff8af63' || '2b10d1278a547f5dc92efbe516144b4ae85f80cb' }}
   CMAKE_BUILD_PARALLEL_LEVEL: 2
 
 jobs:

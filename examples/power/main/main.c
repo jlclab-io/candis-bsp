@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "bsp/candis.h"
+#include "bsp/candis_power.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -11,24 +12,17 @@
 
 static const char *TAG = "candis_power_demo";
 
-#ifdef CONFIG_CANDIS_POWER_DEMO_CHARGE_25MA
+#ifdef CONFIG_CANDIS_POWER_DEMO_CHARGE_TEST
 #define CHARGE_TEST_LABEL "25 mA"
-#else
-#define CHARGE_TEST_LABEL "200 mA"
-#endif
 
 enum {
-    CHARGE_BASELINE_MA = 50,
-#ifdef CONFIG_CANDIS_POWER_DEMO_CHARGE_25MA
     CHARGE_TEST_MA = 25,
-#else
-    CHARGE_TEST_MA = 200,
-#endif
     CHARGE_TEST_SECONDS = 15,
     CONFIRM_SECONDS = 8,
     START_TEST = 1,
     STOP_TEST = 2,
 };
+#endif
 
 typedef struct {
     tg28_esp_status_t status;
@@ -141,13 +135,19 @@ static esp_err_t set_verified_current(uint16_t target_ma)
     return err;
 }
 
-static void restore_current(void)
+static void restore_current(bool charger_ready)
 {
     s_deadline_us = 0;
-    if (set_verified_current(CHARGE_BASELINE_MA) == ESP_OK) {
+    if (set_verified_current(CANDIS_OTP_CHARGE_CURRENT_MA) == ESP_OK) {
         s_restore_pending = false;
+        if (s_charge_disabled) {
+            s_message = "50 mA setpoint. Charger disabled.";
+        } else if (charger_ready && candis_power_ensure_default_charge() == ESP_OK) {
+            s_message = "200 mA restored.";
+        } else {
+            s_message = "50 mA setpoint. Checking charger.";
+        }
         candis_example_usb_end_operation();
-        s_message = s_charge_disabled ? "50 mA restored. Charger disabled." : "50 mA restored.";
         return;
     }
     s_test_locked = true;
@@ -166,7 +166,7 @@ static bool handle_charge(uint32_t command, esp_err_t err, const sample_t *sampl
             if (blocked) {
                 ESP_LOGW(TAG, "Charge test abort: %s", blocked);
             }
-            restore_current();
+            restore_current(!blocked);
             return true;
         }
         return false;
@@ -182,9 +182,9 @@ static bool handle_charge(uint32_t command, esp_err_t err, const sample_t *sampl
     if (!(command & START_TEST)) {
         return false;
     }
-    if (blocked || sample->charger.current_ma != CHARGE_BASELINE_MA) {
+    if (blocked || sample->charger.current_ma != CANDIS_DEFAULT_CHARGE_CURRENT_MA) {
         s_confirm_until_us = 0;
-        s_message = blocked ? blocked : "Requires the original 50 mA setting";
+        s_message = blocked ? blocked : "Requires the 200 mA setpoint";
         ESP_LOGW(TAG, "Charge test blocked: %s direction=%u timers=%u/%u",
                  s_message, sample->status.direction, sample->charger.precharge_timer_enabled,
                  sample->charger.charge_timer_enabled);
@@ -206,7 +206,7 @@ static bool handle_charge(uint32_t command, esp_err_t err, const sample_t *sampl
     s_deadline_us = now + CHARGE_TEST_SECONDS * 1000000LL;
     if (set_verified_current(CHARGE_TEST_MA) != ESP_OK) {
         s_test_locked = true;
-        restore_current();
+        restore_current(false);
     } else {
         s_message = "Supervised test";
     }
@@ -397,6 +397,7 @@ void app_main(void)
     }
 
     int64_t next_log = 0;
+    int64_t next_charge_check = 0;
     for (;;) {
 #ifdef CONFIG_CANDIS_POWER_DEMO_CHARGE_TEST
         uint32_t command = 0;
@@ -411,7 +412,20 @@ void app_main(void)
         if (handle_charge(command, err, &sample, now)) {
             err = sample_power(&sample);
         }
+        if (s_restore_pending) {
+            next_charge_check = now + 1000000;
+        }
 #endif
+        if (err == ESP_OK && now >= next_charge_check && sample.status.vbus_good &&
+            sample.status.battery_present && sample.charger.enabled &&
+            sample.charger.current_ma == CANDIS_OTP_CHARGE_CURRENT_MA) {
+            next_charge_check = now + 1000000;
+            const esp_err_t charge = candis_power_ensure_default_charge();
+            if (charge == ESP_OK) {
+                s_message = "200 mA setpoint verified.";
+            }
+            err = sample_power(&sample);
+        }
         update_ui(err, &sample);
         if (now >= next_log) {
             next_log = now + 1000000;

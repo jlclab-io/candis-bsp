@@ -1,11 +1,14 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 #include "bsp/esp-bsp.h"
+#include "candis_example_usb.h"
 #include "esp_log.h"
 
 static const char *TAG = "candis_minimal";
 
 void app_main(void)
 {
+    ESP_ERROR_CHECK_WITHOUT_ABORT(candis_example_usb_start(CANDIS_EXAMPLE_USB_CONSOLE, true));
+
     ESP_ERROR_CHECK(bsp_i2c_init());
     ESP_ERROR_CHECK(bsp_i2c_init());
     i2c_master_bus_handle_t bus = bsp_i2c_get_handle();

@@ -4,6 +4,7 @@
 #include "esp_adc/adc_cali.h"
 #include "esp_adc/adc_cali_scheme.h"
 #include "esp_adc/adc_oneshot.h"
+#include "esp_idf_version.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -45,7 +46,12 @@ static void sample_window(adc_oneshot_unit_handle_t adc, const adc_channel_t cha
             }
             const int average = sum / SAMPLES;
             int mv;
-            if (cali && adc_cali_chan_raw_to_voltage(cali, channels[i], average, &mv) == ESP_OK) {
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 2, 0) && defined(ADC_CALI_SCHEME_LINE_FITTING_SUPPORTED)
+            const bool calibrated = cali && adc_cali_chan_raw_to_voltage(cali, channels[i], average, &mv) == ESP_OK;
+#else
+            const bool calibrated = false;
+#endif
+            if (calibrated) {
                 ESP_LOGI(TAG, "ADC_SAMPLE gpio=%d raw=%d min=%d max=%d voltage=%d mV",
                          PINS[i], average, minimum, maximum, mv);
             } else {
@@ -82,13 +88,17 @@ void app_main(void)
     for (unsigned i = 0; i < CHANNELS; ++i) {
         ESP_ERROR_CHECK(adc_oneshot_config_channel(adc, channels[i], &channel_config));
     }
+    adc_cali_handle_t cali = NULL;
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 2, 0) && defined(ADC_CALI_SCHEME_LINE_FITTING_SUPPORTED)
     const adc_cali_line_fitting_config_t cali_config = {
         .unit_id = unit,
         .atten = channel_config.atten,
         .bitwidth = channel_config.bitwidth,
     };
-    adc_cali_handle_t cali = NULL;
     const esp_err_t calibration = adc_cali_create_scheme_line_fitting(&cali_config, &cali);
+#else
+    const esp_err_t calibration = ESP_ERR_NOT_SUPPORTED;
+#endif
     vTaskDelay(pdMS_TO_TICKS(1500));
     ESP_LOGI(TAG, "ADC_READY GPIO%d/%d samples=%d atten=0dB calibration=%s",
              PINS[0], PINS[1], SAMPLES, esp_err_to_name(calibration));

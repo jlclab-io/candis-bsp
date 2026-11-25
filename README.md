@@ -19,7 +19,7 @@
 
 ## Quick start
 
-**Prepare ESP-IDF.** Use [ESP-IDF 6.2](https://github.com/espressif/esp-idf/commit/2b10d1278a547f5dc92efbe516144b4ae85f80cb). In the ESP-IDF checkout, run `./install.sh esp32s31` and `source ./export.sh`.
+**Prepare ESP-IDF.** Use [ESP-IDF 6.2](https://github.com/espressif/esp-idf/commit/2b10d1278a547f5dc92efbe516144b4ae85f80cb) as the primary environment. ESP-IDF 6.1 is supported for compatibility. In the ESP-IDF checkout, run `./install.sh esp32s31` and `source ./export.sh`.
 
 **Build the display example.** ESP32-S31 uses `--preview` with the linked SDK revision.
 
@@ -66,6 +66,7 @@ Power off before fitting a baseboard. Connect one baseboard at a time across bot
 - [**Display**](examples/display) brings up the AMOLED and LVGL touch UI.
 - [**Audio recorder**](examples/audio/README.md) and [**music player**](examples/music_player/README.md) demo stereo recording and playback.
 - [**Camera**](examples/camera) selects a DVP sensor profile for capture or AMOLED preview.
+- [**Wi-Fi and BLE coexistence**](examples/bleprph_wifi_coex/README.md) combines access-point scanning, HTTP access, and a BLE GATT server.
 - [**Dock**](examples/dock/README.md) and [**expansion**](examples/expansion) exercise microSD and module discovery.
 
 [Browse all examples →](docs/en/examples.md)

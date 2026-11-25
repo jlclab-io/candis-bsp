@@ -21,9 +21,10 @@ config CANDIS_TF_MANAGE_POWER
         holds DC1SW until Q is received on the console.
 
 config CANDIS_TF_WRITE_TEST
-    bool "Enable the explicit W command to verify a 4 KiB temporary file"
+    bool "Enable the touchscreen and W command 4 KiB read/write test"
     help
-        Use a test card. The example opens an unused filename exclusively,
-        synchronizes and compares its contents, then removes the file.
+        Show a touchscreen test button and accept W on the console. The
+        example opens an unused filename exclusively, synchronizes and
+        compares its contents, then removes the file.
 
 endmenu

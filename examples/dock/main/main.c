@@ -12,6 +12,7 @@
 #include "candis_example_usb.h"
 #include "display.h"
 #include "driver/gpio.h"
+#include "driver/sdmmc_host.h"
 #include "eeprom.h"
 #include "esp_check.h"
 #include "esp_timer.h"
@@ -23,7 +24,26 @@
 static const char *TAG = "dock_demo";
 enum { CELL_LIMIT_MA = 200, BOARD_LDO_MV = 3300 };
 
+static candis_storage_config_t fixture_storage_config(void)
+{
+    candis_storage_config_t config = CANDIS_STORAGE_CONFIG_DEFAULT();
+    config.slot.clk = GPIO_NUM_24;
+    config.slot.cmd = GPIO_NUM_25;
+    config.slot.d0 = GPIO_NUM_20;
+    config.slot.d1 = GPIO_NUM_21;
+    config.slot.d2 = GPIO_NUM_22;
+    config.slot.d3 = GPIO_NUM_23;
+    config.slot.cd = GPIO_NUM_35;
+    config.slot.wp = SDMMC_SLOT_NO_WP;
+    config.slot.width = 4;
+    config.slot.flags |= SDMMC_SLOT_FLAG_INTERNAL_PULLUP;
+    config.card_detect_active_low = true;
+    config.use_dc1sw = true;
+    return config;
+}
+
 static candis_baseboard_info_t s_identity;
+static i2c_master_bus_handle_t s_imu_bus;
 static bool s_dock;
 static bool s_fixture;
 static bool s_detect;
@@ -75,10 +95,15 @@ static esp_err_t read_power(power_sample_t *sample, bool details)
     if (details) {
         uint8_t channels;
         ESP_RETURN_ON_ERROR(tg28_esp_read_adc_mask(&s_pmu, &channels), TAG, "TG28 ADC configuration");
-        if (channels & TG28_ESP_ADC_VBAT) {
+        if (sample->status.battery_present && (channels & TG28_ESP_ADC_VBAT)) {
             ESP_RETURN_ON_ERROR(tg28_esp_read_adc_uv(&s_pmu, TG28_ESP_ADC_VBAT, &sample->vbat_uv),
                                 TAG, "battery voltage ADC");
-            sample->vbat_valid = true;
+            if (sample->vbat_uv >= 2500000 && sample->vbat_uv <= 4400000) {
+                sample->vbat_valid = true;
+            } else {
+                ESP_LOGW(TAG, "VBAT ADC outside the TG28 operating range: %" PRIu32 " uV",
+                         sample->vbat_uv);
+            }
         }
     }
     return ESP_OK;
@@ -123,7 +148,7 @@ static esp_err_t require_usb(power_sample_t *power)
         (!status->battery_present ||
          (status->direction != TG28_ESP_BATTERY_DISCHARGING &&
           status->direction != TG28_ESP_BATTERY_DIRECTION_UNKNOWN &&
-          (!charger->enabled || (charger->current_ma < CELL_LIMIT_MA && charger->precharge_ma < CELL_LIMIT_MA))))) {
+          (!charger->enabled || (charger->current_ma <= CELL_LIMIT_MA && charger->precharge_ma <= CELL_LIMIT_MA))))) {
         return ESP_OK;
     }
     log_power(power);
@@ -165,6 +190,7 @@ static esp_err_t close_expansion(void)
     if (err == ESP_OK) {
         s_dock = false;
     }
+    candis_storage_reset_config();
     return err;
 }
 
@@ -178,7 +204,11 @@ static esp_err_t open_expansion(bool fixture)
     esp_err_t err;
     if (fixture) {
         s_fixture = true;
-        err = candis_expansion_power_acquire(true);
+        const candis_storage_config_t storage = fixture_storage_config();
+        err = candis_storage_configure(&storage);
+        if (err == ESP_OK) {
+            err = candis_expansion_power_acquire(true);
+        }
         if (err == ESP_OK) {
             ESP_LOGI(TAG, "Validation fixture profile selected, TF CD on GPIO35");
         }
@@ -192,7 +222,7 @@ static esp_err_t open_expansion(bool fixture)
     }
     if (err == ESP_OK) {
         s_detect = true;
-        err = fixture ? candis_storage_detect_start(CANDIS_STORAGE_FIXTURE)
+        err = fixture ? candis_storage_detect_start(false)
                       : candis_dock_detect_start(&s_identity);
     }
     if (err != ESP_OK) {
@@ -254,7 +284,7 @@ static esp_err_t test_card(bool write)
     power_sample_t power;
     ESP_RETURN_ON_ERROR(require_usb(&power), TAG, "power TF test");
     bool present;
-    ESP_RETURN_ON_ERROR(candis_storage_detect_read(&present), TAG, "read GPIO39");
+    ESP_RETURN_ON_ERROR(candis_storage_detect_read(&present), TAG, "read card detect");
     ESP_RETURN_ON_FALSE(present, ESP_ERR_NOT_FOUND, TAG, "TF slot empty");
 
     const candis_storage_mount_config_t config = {.read_only = !write};
@@ -262,7 +292,7 @@ static esp_err_t test_card(bool write)
     s_mount = true;
     const esp_err_t mount = s_dock
         ? candis_dock_mount_with_config(&s_identity, CANDIS_EXAMPLE_TF_PATH, &config, &card)
-        : candis_storage_mount_with_config(CANDIS_EXAMPLE_TF_PATH, CANDIS_STORAGE_FIXTURE, &config, &card);
+        : candis_storage_mount_with_config(CANDIS_EXAMPLE_TF_PATH, &config, &card);
     esp_err_t io = mount;
     if (mount == ESP_OK) {
         const uint64_t mib = (uint64_t)card->csd.capacity * card->csd.sector_size / (1024 * 1024);
@@ -408,6 +438,12 @@ static esp_err_t release_all(void)
     esp_err_t imu = ESP_OK;
     if (s_imu_cleanup) {
         imu = candis_imu_stop();
+        if (imu == ESP_OK && s_imu_bus) {
+            imu = candis_i2c_release(s_imu_bus);
+            if (imu == ESP_OK) {
+                s_imu_bus = NULL;
+            }
+        }
         s_imu_cleanup = imu != ESP_OK;
     }
 #endif
@@ -454,11 +490,20 @@ static esp_err_t tone_dock(void)
 #if BSP_CAPS_IMU
 static esp_err_t motion(void)
 {
-    if (!s_dock || s_imu_cleanup) {
+    if (!s_dock || s_imu_cleanup || s_imu_bus) {
         return ESP_ERR_INVALID_STATE;
     }
-    s_imu_cleanup = true;
-    esp_err_t err = candis_imu_start(false);
+    candis_imu_config_t config = CANDIS_IMU_CONFIG_DEFAULT();
+    config.i2c_bus = NULL;
+    config.i2c_address = 0x68;
+    esp_err_t err = candis_i2c_acquire(&s_imu_bus);
+    if (err == ESP_OK) {
+        config.i2c_bus = s_imu_bus;
+        err = candis_imu_start_with_config(&config);
+    }
+    if (err == ESP_OK) {
+        s_imu_cleanup = true;
+    }
     if (err == ESP_OK) {
         candis_imu_sample_t sample;
         vTaskDelay(pdMS_TO_TICKS(100) + 1);
@@ -482,9 +527,19 @@ static esp_err_t motion(void)
             }
         }
     }
-    const esp_err_t stop = candis_imu_stop();
-    s_imu_cleanup = stop != ESP_OK;
-    return err == ESP_OK ? stop : err;
+    esp_err_t stop = ESP_OK;
+    esp_err_t release = ESP_OK;
+    if (s_imu_bus) {
+        stop = candis_imu_stop();
+        if (stop == ESP_OK) {
+            release = candis_i2c_release(s_imu_bus);
+            if (release == ESP_OK) {
+                s_imu_bus = NULL;
+            }
+        }
+    }
+    s_imu_cleanup = stop != ESP_OK || release != ESP_OK;
+    return err == ESP_OK ? (stop == ESP_OK ? release : stop) : err;
 }
 #endif
 
@@ -512,10 +567,7 @@ static esp_err_t selftest(void)
     }
     if (err == ESP_OK) {
         vTaskDelay(pdMS_TO_TICKS(1000));
-        err = tone(CANDIS_DOCK_SPEAKER_LEFT, 25);
-    }
-    if (err == ESP_OK) {
-        err = tone(CANDIS_DOCK_SPEAKER_RIGHT, 25);
+        err = tone_dock();
     }
     const esp_err_t release = release_all();
     ESP_LOGI(TAG, "SELFTEST result=%s release=%s", esp_err_to_name(err), esp_err_to_name(release));

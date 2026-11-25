@@ -5,26 +5,10 @@ config CANDIS_POWER_DEMO_PANEL_POWER
     default n
 
 config CANDIS_POWER_DEMO_CHARGE_TEST
-    bool "Enable a supervised charge setpoint test"
+    bool "Enable the supervised 25 mA charge setpoint test"
     default n
     help
-        Adds a two-step confirmation on the touchscreen. Boot does not
-        start the test.
-
-choice CANDIS_POWER_DEMO_CHARGE_TARGET
-    prompt "Supervised test setpoint"
-    depends on CANDIS_POWER_DEMO_CHARGE_TEST
-    default CANDIS_POWER_DEMO_CHARGE_200MA
-
-config CANDIS_POWER_DEMO_CHARGE_25MA
-    bool "25 mA (reduce from 50 mA)"
-
-config CANDIS_POWER_DEMO_CHARGE_200MA
-    bool "200 mA (external current limit and cell temperature cutoff required)"
-    help
-        Use only with independent battery-branch current limiting and cell
-        temperature cutoff suitable for the installed battery.
-
-endchoice
+        Adds a two-step touchscreen action that temporarily reduces the
+        200 mA setpoint to 25 mA during constant-current charging.
 
 endmenu

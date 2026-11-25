@@ -151,7 +151,7 @@ static lv_obj_t *action(lv_obj_t *parent, const char *caption, int x, uint32_t c
 static void create_ui(lv_display_t *display)
 {
     lv_obj_t *screen = lv_display_get_screen_active(display);
-    lv_obj_remove_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(screen, false);
     lv_obj_set_style_bg_color(screen, lv_color_hex(0x111722), 0);
     label_at(screen, "Audio recorder", &lv_font_montserrat_32, 32, 27);
     s_ui.status = label_at(screen, "Ready to record", &lv_font_montserrat_20, 32, 87);

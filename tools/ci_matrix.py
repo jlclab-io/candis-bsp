@@ -18,7 +18,6 @@ GROUPS = {
         ("candis_minimal", "default"),
         ("display", "default"),
         ("bsp_api", "default"),
-        ("diagnostics", "features"),
         ("audio", "default"),
         ("music_player", "default"),
         ("power", "default"),
@@ -72,6 +71,7 @@ GROUPS = {
         ("gpio", "default"),
         ("wifi_scan", "default"),
         ("ble_scan", "default"),
+        ("bleprph_wifi_coex", "default"),
         ("sleep", "default"),
         ("flash", "default"),
     ],
@@ -82,7 +82,6 @@ EXTRA_DEFAULTS = {
     ("motion", "fixture"): ("@motion-storage", "@motion-fixture"),
 }
 CONFIG_FRAGMENTS = {
-    ("diagnostics", "features"): ("features",),
     ("camera", "fixture"): ("fixture",),
     ("camera", "dvp_all"): ("dvp_all",),
     ("camera", "jpeg"): ("fixture", "jpeg"),
@@ -169,8 +168,8 @@ def plan_paths(paths: list[str]) -> list[str]:
             selected.update(ALL_DEFAULT_IDS)
         elif parts[0] == "components" and len(parts) > 1:
             component = parts[1]
-            if component == "candis":
-                selected.update(CORE_SMOKE_IDS)
+            if component in {"candis", "tg28-esp"}:
+                selected.update(ALL_DEFAULT_IDS)
             elif component == "candis-camera":
                 selected.update(builds_for_project("camera"))
             elif component == "candis-dock":
@@ -181,8 +180,6 @@ def plan_paths(paths: list[str]) -> list[str]:
                         "motion:dock",
                     }
                 )
-            elif component == "tg28-esp":
-                selected.add("tg28:default")
             else:
                 selected.update(ALL_DEFAULT_IDS)
         elif parts[0] == "examples" and len(parts) > 1:
@@ -190,14 +187,12 @@ def plan_paths(paths: list[str]) -> list[str]:
             if project == "common":
                 selected.update(ALL_DEFAULT_IDS)
             elif project in DEFAULT_BUILD_BY_PROJECT:
-                if path.name.startswith("sdkconfig") or path.name in {"Kconfig.projbuild", "CMakeLists.txt"}:
-                    selected.update(builds_for_project(project))
-                elif project == "camera" and path.name in {"still_jpeg.c", "still_jpeg.h"}:
+                if project == "camera" and path.name in {"still_jpeg.c", "still_jpeg.h"}:
                     selected.update({"camera:jpeg", "camera:yuyv"})
                 elif project == "camera":
                     selected.update(builds_for_project(project))
                 else:
-                    selected.add(DEFAULT_BUILD_BY_PROJECT[project].build_id)
+                    selected.update(builds_for_project(project))
             else:
                 selected.update(ALL_DEFAULT_IDS)
         elif parts[0] == "tests" and len(parts) > 1:
@@ -207,7 +202,12 @@ def plan_paths(paths: list[str]) -> list[str]:
             selected.update(ALL_DEFAULT_IDS)
         elif parts[:2] == (".github", "actions"):
             selected.update(ALL_DEFAULT_IDS)
-        elif parts[:2] == (".github", "workflows") or parts[0] == "tools":
+        elif parts[:2] == (".github", "workflows"):
+            selected.update(CORE_SMOKE_IDS)
+            if raw_path == ".github/workflows/registry-release.yml":
+                selected.add("dock:default")
+            continue
+        elif parts[0] == "tools":
             if raw_path == "tools/ci_matrix.py":
                 selected.update(CORE_SMOKE_IDS)
             elif raw_path == "tools/stage_registry_extension.py":

@@ -7,6 +7,7 @@
 #include "esp_err.h"
 #include "bsp/display.h"
 #include "bsp/touch.h"
+#include "bsp/candis_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -17,15 +18,17 @@ extern "C" {
 #define BSP_I2C_SDA GPIO_NUM_7
 
 /** Acquire the ESP-BSP bus reference. Repeated initialization is idempotent.
+ * The initial acquisition checks whether the board's charge profile can be applied.
  * @note Use from task context. Lifecycle calls may return ESP_ERR_INVALID_STATE
  *       during another board operation. Retry from the control task. */
 esp_err_t bsp_i2c_init(void);
 /** Remove application devices before releasing the ESP-BSP bus reference. */
 esp_err_t bsp_i2c_deinit(void);
-/** Acquire the ESP-BSP bus reference on demand and return its borrowed handle. */
+/** Initialize the ESP-BSP bus as in bsp_i2c_init() and return its borrowed handle. */
 i2c_master_bus_handle_t bsp_i2c_get_handle(void);
 
-/** A successful acquire grants one reference. Remove your I2C devices before release. */
+/** Acquire one reference and apply the initial board charge profile when eligible.
+ * Remove your I2C devices before release. */
 esp_err_t candis_i2c_acquire(i2c_master_bus_handle_t *bus);
 esp_err_t candis_i2c_release(i2c_master_bus_handle_t bus);
 

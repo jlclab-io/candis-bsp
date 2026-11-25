@@ -31,6 +31,7 @@ esp_err_t bsp_i2c_deinit(void);
 i2c_master_bus_handle_t bsp_i2c_get_handle(void);
 esp_err_t candis_i2c_acquire(i2c_master_bus_handle_t *bus);
 esp_err_t candis_i2c_release(i2c_master_bus_handle_t bus);
+void candis_power_init_default_charge_locked(void);
 """
 
 TEST = r"""
@@ -39,6 +40,11 @@ TEST = r"""
 
 static int instance, starts, stops;
 static bool allocated, fail_start, fail_stop;
+
+void candis_power_init_default_charge_locked(void)
+{
+    assert(allocated);
+}
 
 esp_err_t i2c_new_master_bus(const i2c_master_bus_config_t *config, i2c_master_bus_handle_t *bus)
 {

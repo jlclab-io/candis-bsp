@@ -2,22 +2,41 @@ dependencies:
   candis:
     dependencies:
     - name: idf
-      version: '>=6.2,<6.3'
+      version: '>=6.1,<6.3'
     - name: tg28-esp
       path: ../tg28-esp
+      public: false
     - name: espressif/esp_lcd_touch_cst9220
+      public: true
       version: 0.1.2
     - name: espressif/esp_lvgl_port
+      public: true
+      rules:
+      - if: $CONFIG{CANDIS_NO_GRAPHIC_LIB} == False
       version: 2.9.0
     - name: lvgl/lvgl
       public: true
+      rules:
+      - if: $CONFIG{CANDIS_NO_GRAPHIC_LIB} == False
       version: 9.6.0~1
     - name: espressif/esp_codec_dev
+      public: true
+      rules:
+      - if: $CONFIG{CANDIS_AUDIO} == True
       version: 1.6.2
     - name: espressif/bmi270
       rules:
       - if: $CONFIG{CANDIS_IMU} == True
       version: 1.1.0
+    - name: espressif/esp_tinyusb
+      rules:
+      - if: $CONFIG{CANDIS_USB_DEVICE} == True
+      version: 3.0.0
+    - name: espressif/usb
+      public: true
+      rules:
+      - if: $CONFIG{CANDIS_USB_HOST} == True
+      version: 1.6.0
     source:
       path: ../../components/candis
       type: local
@@ -34,16 +53,6 @@ dependencies:
       registry_url: https://components.espressif.com
       type: service
     version: 0.5.3
-  espressif/esp_codec_dev:
-    component_hash: 4779f31a3ba3f9b38aee1afe6ccb9ba8f6108dc3a6e77d39d7d714e9a215371b
-    dependencies:
-    - name: idf
-      require: private
-      version: '>=4.0'
-    source:
-      registry_url: https://components.espressif.com/
-      type: service
-    version: 1.6.2
   espressif/esp_lcd_touch:
     component_hash: 3f85a7d95af876f1a6ecca8eb90a81614890d0f03a038390804e5a77e2caf862
     dependencies:
@@ -140,7 +149,7 @@ dependencies:
   tg28-esp:
     dependencies:
     - name: idf
-      version: '>=6.2,<6.3'
+      version: '>=6.1,<6.3'
     source:
       path: ../../components/tg28-esp
       type: local
@@ -148,6 +157,7 @@ dependencies:
 direct_dependencies:
 - candis
 - espressif/esp_tinyusb
-manifest_hash: 0d3149d526cc2f0652d05434e1860d38b1ae857434435e164ef79f89cff7efb7
+- tg28-esp
+manifest_hash: 6084376932921214ba4205b0bf0bb98aef15fbaedc9eca2433b208b589cd3806
 target: esp32s31
 version: 3.0.0

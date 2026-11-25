@@ -1,3 +1,5 @@
 dependencies:
   candis:
     path: ../../../components/candis
+  tg28-esp:
+    path: ../../../components/tg28-esp

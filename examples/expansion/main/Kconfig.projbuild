@@ -5,8 +5,7 @@ menu "Candis expansion example"
         depends on SPIRAM
         default n
         help
-            Requires an externally powered Candis AMOLED. Uses the board's
-            LVGL display and leaves the panel power under its existing owner.
+            Manage ALDO1 and show the Dock/TF status on the fixed Candis AMOLED.
 
     config CANDIS_EXPANSION_SHARED_SW5
         bool "Sample SW5 on the shared BMI270 INT1 line"

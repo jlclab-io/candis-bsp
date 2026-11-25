@@ -8,6 +8,6 @@ idf.py --preview -C examples/music_player build
 
 Tap **Play** to loop *First Light*, or **Stop** to end playback. Adjust **Volume** and switch between **Left**, **Stereo**, and **Right** from the display. The player generates stereo PCM from the score compiled into the application, with no storage or network setup.
 
-The default build uses existing power. On a fixture with verified wiring and supply, `sdkconfig.bench` opts into panel and audio rail management.
+The default build uses existing power. On an assembly with verified wiring and supply, `sdkconfig.bench` opts into panel and audio rail management.
 
 The bundled [score](main/score.h) is licensed under [CC0-1.0](https://creativecommons.org/publicdomain/zero/1.0/).

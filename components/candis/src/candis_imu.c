@@ -22,9 +22,10 @@
 #define BMI270_ADV_POWER_SAVE (1U << 0)
 
 static const char *TAG = "candis_imu";
-static candis_power_t s_power = {.rail = CANDIS_RAIL_EXPANSION};
 static bmi270_handle_t *s_bmi;
 static i2c_master_dev_handle_t s_pending_remove;
+static i2c_master_bus_handle_t s_bus;
+static uint8_t s_address;
 static bool s_ready;
 static bool s_measuring;
 static bool s_configured;
@@ -91,11 +92,11 @@ static esp_err_t set_advanced_power_save(bool enabled)
 static esp_err_t enable_measurements(void)
 {
     const bmi270_driver_config_t driver = {
-        .addr = CANDIS_IMU_ADDR,
+        .addr = s_address,
         .interface = BMI270_USE_I2C,
-        .i2c_bus = s_power.bus,
+        .i2c_bus = s_bus,
     };
-    ESP_RETURN_ON_ERROR(i2c_master_probe(s_power.bus, CANDIS_IMU_ADDR, 100), TAG, "probe BMI270");
+    ESP_RETURN_ON_ERROR(i2c_master_probe(s_bus, s_address, 100), TAG, "probe BMI270");
     ESP_RETURN_ON_ERROR(bmi270_create(&driver, &s_bmi), TAG, "initialize BMI270");
     const uint8_t reg = BMI270_INT1_IO_CTRL;
     uint8_t config;
@@ -128,19 +129,14 @@ static esp_err_t stop_locked(void)
         ESP_RETURN_ON_ERROR(i2c_master_bus_rm_device(s_pending_remove), TAG, "retry BMI270 I2C device removal");
         s_pending_remove = NULL;
     }
-    return candis_power_release(&s_power);
-}
-
-esp_err_t candis_imu_start(bool manage_power)
-{
-    candis_imu_config_t config = CANDIS_IMU_CONFIG_DEFAULT();
-    config.manage_power = manage_power;
-    return candis_imu_start_with_config(&config);
+    s_bus = NULL;
+    s_address = 0;
+    return ESP_OK;
 }
 
 esp_err_t candis_imu_start_with_config(const candis_imu_config_t *config)
 {
-    if (!config) {
+    if (!config || !config->i2c_bus || config->i2c_address < 0x08 || config->i2c_address > 0x77) {
         return ESP_ERR_INVALID_ARG;
     }
     bmi270_config_t measurement;
@@ -148,17 +144,16 @@ esp_err_t candis_imu_start_with_config(const candis_imu_config_t *config)
     if (!candis_control_enter()) {
         return ESP_ERR_INVALID_STATE;
     }
-    if (s_power.bus) {
+    if (s_bus) {
         candis_control_leave();
         return ESP_ERR_INVALID_STATE;
     }
     s_measurement = measurement;
     s_accel_scale = config->accel_range_g / 32768.0f;
     s_gyro_scale = config->gyro_range_dps / 32768.0f;
-    esp_err_t result = candis_power_acquire(&s_power, config->manage_power, 20);
-    if (result == ESP_OK) {
-        result = enable_measurements();
-    }
+    s_bus = config->i2c_bus;
+    s_address = config->i2c_address;
+    esp_err_t result = enable_measurements();
     if (result == ESP_OK) {
         s_configured = true;
     } else {
@@ -202,22 +197,44 @@ esp_err_t candis_imu_resume(void)
     return err;
 }
 
-static esp_err_t probe_chip(candis_capability_state_t *state)
+esp_err_t candis_imu_probe(const candis_imu_config_t *config, candis_capability_state_t *state)
 {
-    esp_err_t err = i2c_master_probe(s_power.bus, CANDIS_IMU_ADDR, 100);
+    if (!config || !config->i2c_bus || !state || config->i2c_address < 0x08 || config->i2c_address > 0x77) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (!candis_control_enter()) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    esp_err_t err = i2c_master_probe(config->i2c_bus, config->i2c_address, 100);
     if (err == ESP_ERR_NOT_FOUND) {
         *state = CANDIS_CAPABILITY_NOT_PRESENT;
+        candis_control_leave();
         return ESP_OK;
     }
-    ESP_RETURN_ON_ERROR(err, TAG, "probe BMI270");
+    if (err != ESP_OK) {
+        candis_control_leave();
+        return err;
+    }
     const i2c_device_config_t device = {
-        .dev_addr_length = I2C_ADDR_BIT_LEN_7, .device_address = CANDIS_IMU_ADDR, .scl_speed_hz = 100000,
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7, .device_address = config->i2c_address, .scl_speed_hz = 100000,
     };
-    ESP_RETURN_ON_ERROR(i2c_master_bus_add_device(s_power.bus, &device, &s_pending_remove), TAG, "add BMI270 probe");
+    i2c_master_dev_handle_t probe;
+    const esp_err_t add = i2c_master_bus_add_device(config->i2c_bus, &device, &probe);
+    if (add != ESP_OK) {
+        candis_control_leave();
+        return add;
+    }
     const uint8_t reg = BMI270_CHIP_ID_REG_ADDR;
     uint8_t chip_id;
-    ESP_RETURN_ON_ERROR(i2c_master_transmit_receive(s_pending_remove, &reg, 1, &chip_id, 1, 100),
-                        TAG, "read BMI270 ID");
+    const esp_err_t read = i2c_master_transmit_receive(probe, &reg, 1, &chip_id, 1, 100);
+    const esp_err_t remove = i2c_master_bus_rm_device(probe);
+    candis_control_leave();
+    if (read != ESP_OK) {
+        return read;
+    }
+    if (remove != ESP_OK) {
+        return remove;
+    }
     *state = chip_id == BMI270_CHIP_ID ? CANDIS_CAPABILITY_PRESENT : CANDIS_CAPABILITY_UNSUPPORTED;
     return ESP_OK;
 }
@@ -234,17 +251,6 @@ esp_err_t candis_imu_get_state(candis_capability_state_t *state)
     if (s_configured) {
         *state = CANDIS_CAPABILITY_INITIALIZED;
         err = ESP_OK;
-    } else if (!s_power.bus) {
-        candis_capability_state_t detected;
-        err = candis_power_acquire(&s_power, false, 0);
-        if (err == ESP_OK) {
-            err = probe_chip(&detected);
-        }
-        const esp_err_t cleanup = stop_locked();
-        err = err == ESP_OK ? cleanup : err;
-        if (err == ESP_OK) {
-            *state = detected;
-        }
     }
     candis_control_leave();
     return err;

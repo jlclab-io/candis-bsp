@@ -6,18 +6,11 @@ _Static_assert(BSP_CAPS_AUDIO && BSP_CAPS_IMU && BSP_CAPS_USB_DEVICE && BSP_CAPS
                "Build the BSP API test with all optional interfaces");
 _Static_assert(!BSP_CAPS_SDCARD && !BSP_CAPS_MOTOR,
                "Optional baseboard capabilities must remain runtime capabilities");
-_Static_assert(__builtin_types_compatible_p(__typeof__(&bsp_feature_enable),
-                                            esp_err_t (*)(bsp_feature_t, bool)),
-               "ESP-BSP feature enable signature");
-
 void app_main(void)
 {
     i2c_master_bus_handle_t bus;
     ESP_ERROR_CHECK(bsp_i2c_init());
     bus = bsp_i2c_get_handle();
-    if (bus) {
-        ESP_ERROR_CHECK(bsp_i2c_deinit());
-    }
     candis_power_state_t rails;
     candis_supply_state_t supply;
     uint32_t voltage = 0;
@@ -26,7 +19,8 @@ void app_main(void)
     (void)candis_power_read_battery_uv(&voltage);
     candis_capability_state_t capability;
     candis_baseboard_info_t baseboard;
-    (void)candis_baseboard_probe_state(CANDIS_BASEBOARD_BB, &capability, &baseboard);
+    (void)candis_baseboard_probe_state_on_bus(CANDIS_BASEBOARD_BB, bus, 0x50,
+                                                         &capability, &baseboard);
     const bsp_display_cfg_t ui = {.lvgl_port_cfg = ESP_LVGL_PORT_INIT_CONFIG()};
     lv_display_t *display = bsp_display_start_with_config(&ui);
     if (display) {
@@ -56,11 +50,22 @@ void app_main(void)
         }
     }
     (void)candis_touch_new_with_config(NULL, NULL);
+    candis_storage_config_t storage = CANDIS_STORAGE_CONFIG_DEFAULT();
+    storage.slot.clk = GPIO_NUM_24;
+    storage.slot.cmd = GPIO_NUM_25;
+    storage.slot.d0 = GPIO_NUM_20;
+    storage.slot.d1 = GPIO_NUM_21;
+    storage.slot.d2 = GPIO_NUM_22;
+    storage.slot.d3 = GPIO_NUM_23;
+    storage.slot.cd = GPIO_NUM_35;
+    storage.slot.wp = SDMMC_SLOT_NO_WP;
+    storage.slot.width = 4;
+    storage.use_dc1sw = true;
+    (void)candis_storage_configure(&storage);
     if (bsp_sdcard_mount() == ESP_OK && bsp_sdcard_get_handle()) {
         (void)candis_storage_check_card();
         (void)bsp_sdcard_unmount();
     }
-    (void)bsp_feature_enable(BSP_FEATURE_SD, false);
     sdmmc_host_t sd_host;
     sdmmc_slot_config_t sd_slot;
     bsp_sdcard_get_sdmmc_host(SDMMC_HOST_SLOT_0, &sd_host);
@@ -69,8 +74,12 @@ void app_main(void)
     sdspi_device_config_t sdspi_slot;
     bsp_sdcard_sdspi_get_slot(SPI2_HOST, &sdspi_slot);
     (void)bsp_sdcard_sdspi_mount(NULL);
+    candis_storage_reset_config();
 #if BSP_CAPS_IMU
-    if (candis_imu_start(false) == ESP_OK) {
+    candis_imu_config_t imu = CANDIS_IMU_CONFIG_DEFAULT();
+    imu.i2c_bus = bus;
+    imu.i2c_address = 0x68;
+    if (candis_imu_start_with_config(&imu) == ESP_OK) {
         candis_imu_sample_t sample;
         (void)candis_imu_read(&sample);
         (void)candis_imu_get_state(&capability);
@@ -100,6 +109,9 @@ void app_main(void)
     }
 #endif
     /* Check optional API linkage without starting a motor or sourcing USB power. */
+    candis_motor_config_t motor = CANDIS_MOTOR_CONFIG_DEFAULT();
+    motor.pwm_gpio = GPIO_NUM_5;
+    (void)candis_motor_init(&motor);
     if (candis_motor_pulse(0, 0) != ESP_OK) {
         candis_motor_state_t state;
         (void)candis_motor_get_state(&state);
@@ -118,4 +130,7 @@ void app_main(void)
     (void)bsp_usb_host_start(BSP_USB_HOST_POWER_MODE_AUTO, true);
     (void)bsp_usb_host_stop();
 #endif
+    if (bus) {
+        ESP_ERROR_CHECK(bsp_i2c_deinit());
+    }
 }

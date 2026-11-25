@@ -24,4 +24,6 @@ Call `candis_dock_get_state()` after the expansion rail is available to distingu
 2. Use `candis_dock_detect_start()` to claim card detection and `candis_dock_mount_with_config()` to choose the mount policy. Use `candis_dock_get_speaker_channel()` to map CN3 to left or right PCM.
 3. Close files, then call `candis_storage_unmount()`, `candis_storage_detect_stop()`, and `candis_dock_close()` for resources acquired during the session. Retry a failed release before removing power.
 
+Use `candis_dock_read_eeprom()` for a read-only diagnostic copy of the raw descriptor while the Dock session is initialized.
+
 [Dock example](https://github.com/jlclab-io/candis-bsp/blob/main/examples/dock/README.md) · [Apache-2.0](LICENSE)

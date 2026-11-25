@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-/* Candis hardware revision 1.2. See the hardware compatibility and pin map. */
+/* Fixed hardware carried by the Candis CB revision 1.2 core board.
+ * Baseboard pins, devices, addresses and models are supplied at runtime. */
 #pragma once
 
 #define CANDIS_MAIN_I2C          BSP_I2C_NUM
@@ -8,7 +9,6 @@
 #define CANDIS_PMU_ADDR          0x34
 #define CANDIS_RTC_ADDR          0x32
 #define CANDIS_CODEC_ADDR        0x10
-#define CANDIS_IMU_ADDR          0x68
 #define CANDIS_TOUCH_ADDR        0x5A
 
 #define CANDIS_LCD_SPI           SPI2_HOST
@@ -29,17 +29,3 @@
 #define CANDIS_I2S_WS            GPIO_NUM_17
 #define CANDIS_I2S_DOUT          GPIO_NUM_18
 #define CANDIS_I2S_DIN           GPIO_NUM_19
-
-#define CANDIS_SD_D0             GPIO_NUM_20
-#define CANDIS_SD_D1             GPIO_NUM_21
-#define CANDIS_SD_D2             GPIO_NUM_22
-#define CANDIS_SD_D3             GPIO_NUM_23
-#define CANDIS_SD_CLK            GPIO_NUM_24
-#define CANDIS_SD_CMD            GPIO_NUM_25
-#define CANDIS_FIXTURE_SD_CD     GPIO_NUM_35
-#define CANDIS_EXP_SD_CD         GPIO_NUM_39
-
-#define CANDIS_EXP_I2C           I2C_NUM_1
-#define CANDIS_EXP_SCL           GPIO_NUM_58
-#define CANDIS_EXP_SDA           GPIO_NUM_59
-#define CANDIS_EXP_EEPROM_ADDR   0x50
