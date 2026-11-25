@@ -14,4 +14,4 @@ The component also provides read-only PMU status and the RX8130CE calendar. Enab
 
 The component follows the ESP-BSP layout. Application headers are under `include/bsp`, implementation files are under `src`, and internal board and resource helpers are under `priv_include`. Only the public headers and `REQUIRES` dependencies are exported to consumers.
 
-[API guide](https://github.com/jlclab-io/candis-bsp/blob/main/docs/en/api.md) · [Hardware](https://github.com/jlclab-io/candis-bsp/blob/main/docs/en/hardware.md) · [Examples](https://github.com/jlclab-io/candis-bsp/blob/main/docs/en/examples.md) · [Apache-2.0](LICENSE)
+[API guide](https://github.com/jlclab-io/candis-bsp/blob/main/docs/en/api.md) · [Hardware](https://github.com/jlclab-io/candis-bsp/blob/main/docs/en/hardware.md) · [Examples](https://github.com/jlclab-io/candis-bsp/blob/main/docs/en/examples.md) · [Changelog](CHANGELOG.md) · [Apache-2.0](LICENSE)

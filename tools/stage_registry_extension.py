@@ -17,37 +17,48 @@ LOCAL_DEPENDENCIES = {
 COMPONENTS = Path(__file__).resolve().parents[1] / "components"
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("component", choices=LOCAL_DEPENDENCIES)
-    parser.add_argument("destination", type=Path, help="new staging directory")
-    parser.add_argument("--namespace", required=True)
-    args = parser.parse_args()
-    if not re.fullmatch(r"[a-z0-9]+(?:[_-][a-z0-9]+)*", args.namespace):
-        parser.error("invalid Registry namespace")
+def stage_component(component: str, destination: Path, namespace: str) -> Path:
+    """Stage one extension without filesystem dependencies."""
+    if component not in LOCAL_DEPENDENCIES:
+        raise ValueError(f"{component} does not require Registry staging")
+    if not re.fullmatch(r"[a-z0-9]+(?:[_-][a-z0-9]+)*", namespace):
+        raise ValueError("invalid Registry namespace")
 
-    source = COMPONENTS / args.component
-    destination = args.destination.resolve()
+    source = COMPONENTS / component
+    destination = destination.resolve()
     if destination.is_relative_to(source):
-        parser.error("stage the component outside its source directory")
+        raise ValueError("stage the component outside its source directory")
 
     manifest_file = "idf_component.yml"
     manifest = yaml.safe_load((source / manifest_file).read_text())
     dependencies = manifest["dependencies"]
-    dependency_name = LOCAL_DEPENDENCIES[args.component]
+    dependency_name = LOCAL_DEPENDENCIES[component]
     dependency = dependencies.pop(dependency_name)
     if dependency.pop("path") != f"../{dependency_name}":
-        parser.error(f"expected the local {dependency_name} path")
+        raise ValueError(f"expected the local {dependency_name} path")
     dependency_manifest = yaml.safe_load((COMPONENTS / dependency_name / manifest_file).read_text())
-    dependencies[f"{args.namespace}/{dependency_name}"] = {
+    dependencies[f"{namespace}/{dependency_name}"] = {
         **dependency,
         "version": f"=={dependency_manifest['version']}",
     }
     if any(isinstance(dep, dict) and {"path", "override_path"} & dep.keys()
            for dep in dependencies.values()):
-        parser.error("a filesystem dependency remains in the Registry manifest")
+        raise ValueError("a filesystem dependency remains in the Registry manifest")
     shutil.copytree(source, destination, ignore=shutil.ignore_patterns("dist", "build", "__pycache__"))
     (destination / manifest_file).write_text(yaml.safe_dump(manifest, sort_keys=False))
+    return destination
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("component", choices=LOCAL_DEPENDENCIES)
+    parser.add_argument("destination", type=Path, help="new staging directory")
+    parser.add_argument("--namespace", required=True)
+    args = parser.parse_args()
+    try:
+        stage_component(args.component, args.destination, args.namespace)
+    except ValueError as error:
+        parser.error(str(error))
 
 
 if __name__ == "__main__":

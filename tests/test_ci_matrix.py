@@ -94,12 +94,18 @@ class CiMatrixTest(unittest.TestCase):
         )
 
     def test_registry_scripts_select_relevant_builds_and_host_tests(self):
-        staging = ["tools/stage_registry_extension.py"]
-        self.assertEqual(
-            plan_paths(staging),
-            ["candis_minimal:default", "display:default", "bsp_api:default", "dock:default"],
-        )
-        self.assertTrue(paths_need_host_tests(staging))
+        for script in ("tools/stage_registry_extension.py", "tools/registry_release.py"):
+            with self.subTest(script=script):
+                self.assertEqual(
+                    plan_paths([script]),
+                    [
+                        "candis_minimal:default",
+                        "display:default",
+                        "bsp_api:default",
+                        "dock:default",
+                    ],
+                )
+                self.assertTrue(paths_need_host_tests([script]))
 
         tg28_consumer = ["tools/verify_tg28_consumer.sh"]
         self.assertEqual(plan_paths(tg28_consumer), ["tg28:default"])
@@ -139,6 +145,12 @@ class CiMatrixTest(unittest.TestCase):
             plan_paths([".github/workflows/registry-release.yml"]),
             [*CORE_SMOKE_IDS, "dock:default"],
         )
+
+    def test_sleep_example_uses_the_idf_version_appropriate_sleep_component(self):
+        cmake = (ROOT / "examples/sleep/main/CMakeLists.txt").read_text()
+        self.assertIn("set(SLEEP_COMPONENT esp_hw_support)", cmake)
+        self.assertIn('if(EXISTS "$ENV{IDF_PATH}/components/esp_sleep/CMakeLists.txt")', cmake)
+        self.assertIn("set(SLEEP_COMPONENT esp_sleep)", cmake)
 
 
 if __name__ == "__main__":

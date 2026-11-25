@@ -20,4 +20,4 @@ Pass a zero-initialized device object. Opening registers the I²C device and pre
 
 Serialize each operation to the same PMU from task context. Match supply limits, charge settings, and rail sequencing to the board and battery. Protection changes and reset-capable operations require an explicit open option. Validate actual voltage, battery current, and temperature on the assembled system.
 
-[Driver guide](https://github.com/jlclab-io/candis-bsp/blob/main/docs/en/tg28-esp-coverage.md) · [Read-only monitor](https://github.com/jlclab-io/candis-bsp/blob/main/examples/tg28/README.md) · [Apache-2.0](LICENSE)
+[Driver guide](https://github.com/jlclab-io/candis-bsp/blob/main/docs/en/tg28-esp-coverage.md) · [Read-only monitor](https://github.com/jlclab-io/candis-bsp/blob/main/examples/tg28/README.md) · [Changelog](CHANGELOG.md) · [Apache-2.0](LICENSE)

@@ -213,6 +213,9 @@ def plan_paths(paths: list[str]) -> list[str]:
             elif raw_path == "tools/stage_registry_extension.py":
                 selected.update(CORE_SMOKE_IDS)
                 selected.add("dock:default")
+            elif raw_path == "tools/registry_release.py":
+                selected.update(CORE_SMOKE_IDS)
+                selected.add("dock:default")
             elif raw_path == "tools/verify_tg28_consumer.sh":
                 selected.add("tg28:default")
             continue
@@ -242,6 +245,7 @@ def paths_need_host_tests(paths: list[str]) -> bool:
         if raw_path in {
             "tools/ci_matrix.py",
             "tools/stage_registry_extension.py",
+            "tools/registry_release.py",
             "tools/verify_tg28_consumer.sh",
             "tools/check_markdown_links.py",
         }:

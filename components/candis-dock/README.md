@@ -26,4 +26,4 @@ Call `candis_dock_get_state()` after the expansion rail is available to distingu
 
 Use `candis_dock_read_eeprom()` for a read-only diagnostic copy of the raw descriptor while the Dock session is initialized.
 
-[Dock example](https://github.com/jlclab-io/candis-bsp/blob/main/examples/dock/README.md) · [Apache-2.0](LICENSE)
+[Dock example](https://github.com/jlclab-io/candis-bsp/blob/main/examples/dock/README.md) · [Changelog](CHANGELOG.md) · [Apache-2.0](LICENSE)

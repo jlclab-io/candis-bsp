@@ -4,3 +4,4 @@
 **/sdkconfig.old
 **/dist/
 **/__pycache__/
+/.registry-release/

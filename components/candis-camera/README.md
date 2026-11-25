@@ -44,4 +44,4 @@ RGB565, YUV422, and grayscale modes can preview on the 480 × 480 AMOLED. RAW an
 
 Other `sdkconfig.<model>` fragments select the corresponding sensor driver and mode. Assembly-specific supplies and control pins belong in the application resource callbacks.
 
-[Apache-2.0](LICENSE)
+[Changelog](CHANGELOG.md) · [Apache-2.0](LICENSE)
