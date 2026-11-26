@@ -36,7 +36,7 @@ class RegistryReleaseMetadataTest(unittest.TestCase):
             with self.subTest(component=component):
                 metadata = validate_metadata(component, require_tag=False, commit_sha=None)
                 self.assertEqual(metadata["package"], f"{NAMESPACE}/{component}==0.1.0")
-                self.assertEqual(metadata["tag"], f"{component}/v0.1.0")
+                self.assertEqual(metadata["release_label"], f"{component}/v0.1.0")
 
     def test_dependency_closures_match_the_component_boundaries(self):
         self.assertEqual(dependency_closure("tg28-esp"), ["tg28-esp"])
@@ -119,6 +119,9 @@ class RegistryReleaseWorkflowTest(unittest.TestCase):
             text,
         )
         self.assertNotIn("upload-components-ci-action@v", text)
+
+    def test_publish_does_not_require_a_repository_tag(self):
+        self.assertNotIn("--require-tag", WORKFLOW.read_text())
 
     def test_publish_checks_for_existing_versions_before_the_official_action(self):
         steps = self.config["jobs"]["publish"]["steps"]

@@ -161,7 +161,7 @@ def validate_metadata(component: str, require_tag: bool, commit_sha: str | None)
         "dependency_closure": dependency_closure(component),
         "package": f"{NAMESPACE}/{component}=={version}",
         "repository_path": expected_path,
-        "tag": tag,
+        "release_label": tag,
         "version": version,
     }
 

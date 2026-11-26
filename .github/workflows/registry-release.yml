@@ -119,15 +119,12 @@ jobs:
       RELEASE_DIR: ${{ github.workspace }}/.registry-release/publish
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          fetch-depth: 0
       - uses: ./.github/actions/setup-esp32s31
-      - name: Verify the release tag and manifest are consistent
+      - name: Validate release metadata
         run: |
           source "$RUNNER_TEMP/esp-idf/export.sh"
           python3 tools/registry_release.py validate \
             --component "$COMPONENT" \
-            --require-tag \
             --commit-sha "$GITHUB_SHA"
       - name: Stage and pack the component with required dependencies
         run: |

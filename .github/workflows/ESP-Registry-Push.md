@@ -6,7 +6,7 @@
 
 仓库保留单一 Git 仓库，组件源码分别位于：
 
-| 组件 | 源码目录 | 发布 Tag | 内部依赖 |
+| 组件 | 源码目录 | 发布标识 | 内部依赖 |
 | --- | --- | --- | --- |
 | `jlclab/candis` | `components/candis` | `candis/v<版本>` | `jlclab/tg28-esp` |
 | `jlclab/candis-camera` | `components/candis-camera` | `candis-camera/v<版本>` | 无 Candis BSP 依赖 |
@@ -94,7 +94,7 @@ components/<component>/LICENSE
 
 Manifest 必须满足：
 
-- `version` 是无前缀的 SemVer，例如 `0.1.0`；Tag 使用组件名加 `v`，例如 `candis/v0.1.0`。
+- `version` 是无前缀的 SemVer，例如 `0.1.0`；发布标识使用组件名加 `v`，例如 `candis/v0.1.0`。
 - `repository` 为 `https://github.com/jlclab-io/candis-bsp.git`。
 - `repository_info.path` 为该组件的仓库相对路径。
 - `url` 指向 `main` 分支中的组件目录。
@@ -107,7 +107,7 @@ Manifest 必须满足：
 ## 0.1.0 (Unreleased)
 ```
 
-Tag 只记录正式版本，不触发上传。正式上传前，发布 Tag 必须已在同一 Commit 上创建并推送；Tag、Manifest、Registry 版本和 Commit SHA 必须一致。
+本仓库采用手动组件发布，不要求创建 Git Tag。发布身份由组件名、Manifest 版本和 `main` 上的 Commit SHA 共同确定。Git Tag 不能单独标识 Monorepo 子目录，因此不再把仓库级 Tag 作为发布前置条件。
 
 ## 7. 本地 CI、打包、编译及发布前验证命令
 
@@ -196,8 +196,8 @@ gh run watch <RUN_ID>
 正式发布前必须：
 
 1. 确认目标组件版本和 `CHANGELOG.md` 已提交并推送。
-2. 在目标 Commit 创建并推送 `component/v版本` Tag。
-3. 从 `main` 手动运行同一组件，将 `publish` 设为 `true`。
+2. 确认运行分支为 `main`，并记录其 Commit SHA。
+3. 从 `main` 手动运行目标组件，将 `publish` 设为 `true`。
 4. 等待 `registry` Environment 审批和全部验证 Job 通过。
 
 示例：
@@ -209,11 +209,11 @@ gh workflow run registry-release.yml \
   -f publish=true
 ```
 
-`publish` Job 会再次验证 Manifest、Tag 和 Commit；然后用 `compote --check-only` 拒绝已存在版本；再通过固定 SHA 的官方 Action 上传。普通 Push、PR、Tag Push 和非 `main` 分支均不会进入正式上传 Job。
+`publish` Job 会再次验证 Manifest 和当前 Commit；然后用 `compote --check-only` 拒绝已存在版本；再通过固定 SHA 的官方 Action 上传。普通 Push、PR、Tag Push 和非 `main` 分支均不会进入正式上传 Job。
 
-## 9. Git Tag 和 GitHub Release 管理
+## 9. 发布标识和 GitHub Release 管理
 
-Tag 命名只允许：
+每次正式发布记录以下标识，但本次流程不要求创建 Git Tag：
 
 ```text
 candis/v0.1.0
@@ -222,7 +222,7 @@ candis-dock/v0.1.0
 tg28-esp/v0.1.0
 ```
 
-创建 Tag 前确认 `git rev-parse HEAD` 与远端 `main` 一致。Tag Push 不会触发 Registry 上传。GitHub Release 应只在 Registry 上传和下载回归都成功后创建，并记录相同版本与 Commit SHA。Tag 一旦使用于正式版本，不得移动或强制覆盖。
+发布前确认 `git rev-parse HEAD` 与远端 `main` 一致。若需要额外创建 GitHub Release，应只在 Registry 上传和下载回归都成功后创建，并记录组件名、版本与 Commit SHA。Git Tag 若被使用，仍不会触发 Registry 上传，也不得移动或强制覆盖已发布版本对应的 Tag。
 
 ## 10. 首次发布顺序
 
@@ -232,7 +232,7 @@ tg28-esp/v0.1.0
 2. `candis`
 3. `candis-camera` 和 `candis-dock`（两者可独立安排）
 
-`candis` 发布前必须已有目标版本的 `jlclab/tg28-esp`。`candis-dock` 发布前必须已有目标版本的 `jlclab/candis`。`candis-camera` 不依赖 Candis BSP，但仍要先完成自身验证。每个组件独立创建 Tag、手动 `publish=true`，不得用一个 Tag 代表多个组件。
+`candis` 发布前必须已有目标版本的 `jlclab/tg28-esp`。`candis-dock` 发布前必须已有目标版本的 `jlclab/candis`。`candis-camera` 不依赖 Candis BSP，但仍要先完成自身验证。每个组件单独手动触发 `publish=true`，不要求创建共享 Tag。
 
 ## 11. Registry 安装及发布结果验证
 
@@ -247,7 +247,7 @@ python3 tools/registry_release.py build-consumer \
   --commit-sha "$(git rev-parse HEAD)"
 ```
 
-成功后检查消费者工程的 `dependencies.lock` 和下载目录中的 Manifest。`managed_components/jlclab__<component>/idf_component.yml` 的 `version` 与 `repository_info.commit_sha` 必须和发布 Tag 一致。还应确认依赖闭包从 Registry 下载，而不是使用本地 `override_path`。
+成功后检查消费者工程的 `dependencies.lock` 和下载目录中的 Manifest。`managed_components/jlclab__<component>/idf_component.yml` 的 `version` 与 `repository_info.commit_sha` 必须和发布运行使用的 Manifest、Commit 一致。还应确认依赖闭包从 Registry 下载，而不是使用本地 `override_path`。
 
 发布结果记录建议：
 
@@ -255,7 +255,7 @@ python3 tools/registry_release.py build-consumer \
 Component:
 Version:
 Commit SHA:
-Tag:
+发布标识:
 Workflow run:
 Registry install/build result:
 ```
@@ -272,7 +272,7 @@ Registry install/build result:
 
 ### 依赖解析失败
 
-检查内部依赖是否已经按顺序发布、Manifest 是否使用 Namespace 限定名和精确版本置换结果，以及 Tag/Manifest 版本是否一致。扩展组件必须经过 `tools/stage_registry_extension.py`，禁止直接上传含 `../candis` 或 `../tg28-esp` 的本地 path 包。
+检查内部依赖是否已经按顺序发布、Manifest 是否使用 Namespace 限定名和精确版本置换结果，以及发布标识、Manifest 版本与 Commit SHA 是否一致。扩展组件必须经过 `tools/stage_registry_extension.py`，禁止直接上传含 `../candis` 或 `../tg28-esp` 的本地 path 包。
 
 ### 打包失败
 
@@ -294,4 +294,4 @@ Registry install/build result:
 6. 在 Registry 中创建组件并配置相同的 Trusted Uploader 的 Repository、Workflow、Branch、Environment。
 7. 更新 `full-build.yml` 或 `ci_matrix.py` 的示例覆盖，确保新增组件有独立消费者构建。
 8. 先运行四个现有组件的 publish=false 验证，再运行新组件的两个 ESP-IDF 版本验证。
-9. 首次正式发布遵循依赖顺序，创建独立 Tag 后手动 `publish=true`。
+9. 首次正式发布遵循依赖顺序，逐个手动触发 `publish=true`；不要求创建 Git Tag。
